@@ -1,0 +1,284 @@
+---
+title: "TLC y Pruebas de Hipotesis"
+author: "Benjamín Oliva"
+date: "2025-05-21"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Dependencias y configuración
+
+```{r}
+library(tidyverse)      # Incluye dplyr, ggplot2, etc.
+library(ggplot2)        # Para gráficos
+library(MASS)           # Distribuciones estadísticas
+library(car)            # Varias herramientas estadísticas
+library(stats)          # Funciones estadísticas básicas
+library(scales)         # Escalado en ggplot
+library(ggpubr)         # Mejoras visuales en ggplot2
+library(gridExtra)      # Para arreglos gráficos
+library(EnvStats)       # Para funciones estadísticas adicionales
+library(ggplot2)
+
+```
+
+# Importar datos
+
+```{r}
+df <- read.csv("mosquito.csv")
+
+# df <- read.csv("../../Datos/mosquito.csv")  # Ruta alternativa comentada
+
+# Mostrar las primeras filas
+head(df)
+```
+
+# Gráfica simple: Histograma con densidad (KDE)
+
+```{r}
+ggplot(df, aes(x = mosq)) +
+  geom_histogram(aes(y = ..density..), 
+                 bins = 5, 
+                 fill = "red", 
+                 color = "darkred") +
+  geom_density(color = "red", 
+               linewidth = 1) +
+  theme_minimal()
+```
+
+```{r}
+
+ggplot(df, aes(x = mosq)) +
+  geom_histogram(aes(y = ..density..),
+                 bins = 8,
+                 fill = "blue",
+                 color = "darkblue") +
+  geom_density(color = "blue", 
+               linewidth = 1) +
+  labs(title = "Histograma mosquitos capturados",
+       x = "Mosquitos capturados",
+       y = "Frecuencia") +
+  theme_minimal()
+```
+
+
+```{r}
+# Gráfica con más adecuaciones: línea vertical y anotaciones
+
+# Calcular la media de la variable
+media_mosq <- mean(df$mosq, na.rm = TRUE)
+
+# Crear la gráfica
+ggplot(df, aes(x = mosq)) +
+  geom_histogram(aes(y = ..density..),
+                 bins = 8,
+                 fill = "blue",
+                 color = "darkblue") +
+  geom_density(color = "blue", size = 1) +
+  geom_vline(xintercept = media_mosq, 
+             color = "green", 
+             linetype = "dashed", 
+             linewidth = 1) +
+  annotate("text", x = media_mosq * 1.1, 
+           y = 0.9 * max(density(df$mosq, na.rm = TRUE)$y), 
+           label = sprintf("Mean: %.2f", media_mosq),
+           hjust = 0, vjust = 0) +
+  annotate("text", x = 15, y = 0.08, 
+           label = "Ejemplo",
+           hjust = 0) +
+  labs(title = "Histograma mosquitos capturados",
+       x = "Mosquitos capturados",
+       y = "Frecuencia") +
+  theme_minimal()
+```
+
+
+```{r}
+# Media y Desviación Estándar de la población
+Mu <- mean(df$mosq, na.rm = TRUE)
+Sigma <- sd(df$mosq, na.rm = TRUE)
+
+# Imprimir los resultados
+Mu
+Sigma
+```
+
+# Muestreo
+```{r}
+# Muestreo con reemplazo
+sample(df$mosq, size = 5, replace = TRUE)
+```
+
+```{r}
+# Transformación Z (asumiendo que Mu y Sigma son poblacionales)
+muestra <- sample(df$mosq, size = 5, replace = TRUE)
+Z <- (mean(muestra) - Mu) / (Sigma / sqrt(5))
+Z
+```
+
+```{r}
+# Sistematizamos muestreo
+# Vectores para guardar las medias muestrales estandarizadas (Z)
+array1 <- c()
+array2 <- c()
+array3 <- c()
+array4 <- c()
+
+# Número de repeticiones
+K <- 300
+
+# Tamaños de muestra
+n1 <- 10
+n2 <- 30
+n3 <- 60
+n4 <- 1000
+
+# Bucle para generar K muestras y calcular estadísticos Z
+for (i in 1:K) {
+  muestra1 <- sample(df$mosq, size = n1, replace = TRUE)
+  muestra2 <- sample(df$mosq, size = n2, replace = TRUE)
+  muestra3 <- sample(df$mosq, size = n3, replace = TRUE)
+  muestra4 <- sample(df$mosq, size = n4, replace = TRUE)
+  
+  array1 <- c(array1, (mean(muestra1) - Mu) / (Sigma / sqrt(n1)))
+  array2 <- c(array2, (mean(muestra2) - Mu) / (Sigma / sqrt(n2)))
+  array3 <- c(array3, (mean(muestra3) - Mu) / (Sigma / sqrt(n3)))
+  array4 <- c(array4, (mean(muestra4) - Mu) / (Sigma / sqrt(n4)))
+}
+```
+
+```{r}
+# Visualización para el caso n1 (tamaño de muestra pequeño)
+
+# Calcular la media de los valores en array1
+mean_array1 <- mean(array1, na.rm = TRUE)
+
+# Crear el gráfico
+ggplot(data.frame(array1), aes(x = array1)) +
+  geom_histogram(aes(y = ..density..),
+                 bins = 9,
+                 fill = "yellow",
+                 color = "black") +
+  geom_density(color = "orange", size = 1.2) +
+  geom_vline(xintercept = mean_array1, 
+             color = "black", 
+             linetype = "dashed", 
+             linewidth = 1) +
+  annotate("text", x = mean_array1 * 1.1, 
+           y = 0.9 * max(density(array1, na.rm = TRUE)$y), 
+           label = sprintf("Mean: %.2f", mean_array1),
+           hjust = 0) +
+  labs(title = "Sample size = n1",
+       x = "Z",
+       y = "Frecuencia") +
+  theme_minimal()
+```
+
+```{r}
+# Visualización para el caso n2 (tamaño de muestra mediano)
+
+# Calcular la media de array2
+mean_array2 <- mean(array2, na.rm = TRUE)
+
+# Crear el gráfico
+ggplot(data.frame(array2), aes(x = array2)) +
+  geom_histogram(aes(y = ..density..),
+                 bins = 9,
+                 fill = "magenta",
+                 color = "black") +
+  geom_density(color = "magenta4", size = 1.2) +
+  geom_vline(xintercept = mean_array2, 
+             color = "black", 
+             linetype = "dashed", 
+             linewidth = 1) +
+  annotate("text", x = mean_array2 * 1.1, 
+           y = 0.9 * max(density(array2, na.rm = TRUE)$y), 
+           label = sprintf("Mean: %.2f", mean_array2),
+           hjust = 0) +
+  labs(title = "Sample size = n2",
+       x = "Z",
+       y = "Frecuencia") +
+  theme_minimal()
+```
+
+```{r}
+# Visualización para el caso n3 (tamaño de muestra más grande)
+
+# Calcular la media de array3
+mean_array3 <- mean(array3, na.rm = TRUE)
+
+# Crear el gráfico
+ggplot(data.frame(array3), aes(x = array3)) +
+  geom_histogram(aes(y = ..density..),
+                 bins = 9,
+                 fill = "green",
+                 color = "black") +
+  geom_density(color = "darkgreen", size = 1.2) +
+  geom_vline(xintercept = mean_array3, 
+             color = "black", 
+             linetype = "dashed", 
+             linewidth = 1) +
+  annotate("text", x = mean_array3 * 1.1, 
+           y = 0.9 * max(density(array3, na.rm = TRUE)$y), 
+           label = sprintf("Mean: %.2f", mean_array3),
+           hjust = 0) +
+  labs(title = "Sample size = n3",
+       x = "Z",
+       y = "Frecuencia") +
+  theme_minimal()
+```
+
+```{r}
+# Visualización para el caso n4 (tamaño de muestra muy grande)
+
+# Calcular la media de array4
+mean_array4 <- mean(array4, na.rm = TRUE)
+
+# Crear el gráfico
+ggplot(data.frame(array4), aes(x = array4)) +
+  geom_histogram(aes(y = ..density..),
+                 bins = 9,
+                 fill = "blue",
+                 color = "black") +
+  geom_density(color = "darkblue", size = 1.2) +
+  geom_vline(xintercept = mean_array4, 
+             color = "black", 
+             linetype = "dashed", 
+             linewidth = 1) +
+  annotate("text", x = mean_array4 * 1.1, 
+           y = 0.9 * max(density(array4, na.rm = TRUE)$y), 
+           label = sprintf("Mean: %.2f", mean_array4),
+           hjust = 0) +
+  labs(title = "Sample size = n4",
+       x = "Z",
+       y = "Frecuencia") +
+  theme_minimal()
+```
+
+# ANOVA
+```{r}
+# Asegurarse de que 'treatment' sea un factor
+df$treatment <- as.factor(df$treatment)
+
+# Realizar el ANOVA
+modelo_anova <- aov(mosq ~ treatment, data = df)
+
+# Resumen del ANOVA
+summary(modelo_anova)
+```
+
+## Crear boxplot para comparar medias por tratamiento
+
+```{r}
+# Boxplot para ver diferencias visuales
+ggplot(df, aes(x = treatment, y = mosq)) +
+  geom_boxplot(fill = "skyblue", color = "black") +
+  labs(title = "Comparación de tratamientos",
+       x = "Tratamiento",
+       y = "Mosquitos capturados") +
+  theme_minimal()
+```
+

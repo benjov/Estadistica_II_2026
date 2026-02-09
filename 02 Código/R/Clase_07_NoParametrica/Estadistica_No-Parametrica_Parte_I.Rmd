@@ -1,0 +1,505 @@
+---
+title: "ESTADÍSTICA NO PARAMÉTRICA Parte I"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include = FALSE}
+
+knitr::opts_chunk$set(echo = TRUE)
+
+```
+
+### Dependencies
+```{r, warning = FALSE, message = FALSE}
+library(tidyverse)
+#install.packages('reticulate')
+#CUANDO: Do you want to install from sources the package which needs compilation? (Yes/no/cancel) Y
+library(reticulate) 
+library(stats)
+library(stats4)
+library(ggplot2)
+library(lubridate)
+library(XML)
+library(jsonlite)
+library(httr)
+library(ggplot2)
+library(ggpubr)
+library(plotly)
+library(scales)
+library(dplyr)
+#install.packages('ggthemes')
+library(ggthemes)
+library(httr)
+library(xml2)
+library(MASS)
+
+```
+
+# Busquemos Datos
+
+### Importador de datos de Precios de Gasolinas en Estaciones de Servicio
+
+Los datos fueron tomados de: 
+* Places: https://bit.ly/2V1Z3sm
+* Prices: https://bit.ly/2JNcTha
+* Serie de tiempo: https://www.cre.gob.mx/da/Precios_promedio_diarios_y_mensuales_en_estaciones_de_servicio.xlsx
+
+Nota al margen, tenemos una herramienta en desarrollo disponible en: https://analyticsboutique.github.io/Precios-en-EDS/
+
+```{r}
+# Cargar XML desde una URL
+var_url <- 'https://bit.ly/2V1Z3sm'
+response <- GET(var_url)
+xml_content <- content(response, as = "text", encoding = "UTF-8")
+tree <- read_xml(xml_content)
+
+# Si quisieras cargar un archivo local:
+# tree <- read_xml('places.xml')
+
+root <- xml_root(tree)
+
+#root
+```
+
+```{r}
+# Extraemos los elementos del XML
+ID <- c()
+name <- c()
+cre_id <- c()
+lng <- c()
+lat <- c()
+
+items <- xml_find_all(root, ".//place")  
+
+for (item in items) {
+    ID <- c(ID, xml_attr(item, "place_id"))
+    name <- c(name, xml_text(xml_find_first(item, ".//name")))
+    cre_id <- c(cre_id, xml_text(xml_find_first(item, ".//cre_id")))
+    lng <- c(lng, xml_text(xml_find_first(item, ".//location/x")))
+    lat <- c(lat, xml_text(xml_find_first(item, ".//location/y")))
+}
+
+```
+
+```{r}
+# Imprime el número de registros
+length(ID)
+length(name)
+length(cre_id)
+length(lat)
+length(lng)
+```
+
+```{r}
+# Convertimos a DATAFRAME
+Gasolinerias <- data.frame(ID = ID, name = name, cre_id = cre_id, lat = lat, lng = lng)
+
+# Muestra las primeras filas del dataframe
+#head(Gasolinerias)
+tail(Gasolinerias)
+```
+
+```{r}
+#
+var_url <- 'https://bit.ly/2JNcTha'
+response <- GET(var_url)
+xml_content <- content(response, as = "text", encoding = "UTF-8")
+tree <- read_xml(xml_content)
+
+# Si quisieras cargar un archivo local:
+# tree <- read_xml('prices.xml')
+
+root <- xml_root(tree)
+
+#root
+```
+
+```{r}
+# Extraemos los elementos del XML
+ID <- c()
+tipo <- c()
+gas_price <- c()
+
+# Asumiendo que 'place' es el nombre del nodo
+items <- xml_find_all(root, ".//place")
+
+for (item in items) {
+    ID <- c(ID, xml_attr(item, "place_id"))
+    tipo <- c(tipo, xml_attr(xml_children(item)[[1]], "type"))
+    gas_price <- c(gas_price, xml_text(xml_find_first(item, ".//gas_price")))
+}
+
+```
+
+```{r}
+# Imprime el número de registros
+print(length(ID))
+print(length(tipo))
+print(length(gas_price))
+
+```
+
+```{r}
+# Convertimos a DATAFRAME
+Precios <- data.frame(ID = ID, tipo = tipo, gas_price = gas_price)
+
+# Muestra las primeras filas del dataframe
+#head(Precios)
+tail(Precios)
+```
+
+```{r}
+# Seleccionamos por tipo de gasolina
+Precios_regular <- Precios[Precios$tipo == 'regular', ]
+
+# Muestra las primeras filas del dataframe
+head(Precios_regular)
+
+```
+
+```{r}
+# Seleccionamos por tipo de gasolina
+Precios_premium <- Precios[Precios$tipo == 'premium', ]
+
+# Muestra las primeras filas del dataframe
+head(Precios_premium)
+
+```
+
+```{r}
+# Seleccionamos por tipo de gasolina
+Precios_diesel <- Precios[Precios$tipo == 'diesel', ]
+
+# Muestra las primeras filas del dataframe
+head(Precios_diesel)
+
+```
+
+```{r}
+# Juntamos datos:
+
+# Regular
+Gasolinerias_Precios <- Gasolinerias
+
+Gasolinerias_Precios <- merge(Gasolinerias_Precios, Precios_regular, by = 'ID', all = TRUE)
+
+# Juntamos datos:
+
+Gasolinerias_Precios <- Gasolinerias_Precios %>%
+  rename(regular = gas_price) 
+
+Gasolinerias_Precios <- Gasolinerias_Precios[ , c("ID", "name", "cre_id", "lat", "lng", "regular")]
+
+# Muestra las primeras filas del dataframe
+head(Gasolinerias_Precios)
+
+```
+
+```{r}
+# Premium
+Gasolinerias_Precios <- merge(Gasolinerias_Precios, Precios_premium, by = 'ID', all = TRUE)
+
+Gasolinerias_Precios <- Gasolinerias_Precios %>%
+  rename(premium = gas_price) 
+
+Gasolinerias_Precios <- Gasolinerias_Precios[ , c("ID", "name", "cre_id", "lat", "lng", "regular", "premium")]
+
+# Muestra las primeras filas del dataframe
+head(Gasolinerias_Precios)
+
+```
+
+```{r}
+# Diesel
+Gasolinerias_Precios <- merge(Gasolinerias_Precios, Precios_diesel, by = 'ID', all = TRUE)
+
+Gasolinerias_Precios <- Gasolinerias_Precios %>%
+  rename(diesel = gas_price)
+
+Gasolinerias_Precios <- Gasolinerias_Precios[ , c("ID", "name", "cre_id", "lat", "lng", "regular", "premium", "diesel")]
+
+# Muestra las primeras filas del dataframe
+head(Gasolinerias_Precios)
+
+```
+
+```{r}
+# Verificar valores NA y revisar
+
+Gasolinerias_Precios[is.na(Gasolinerias_Precios$ID), ]
+
+```
+
+```{r}
+# Datos Finales:
+write.csv(Gasolinerias_Precios, 'Gasolinerias_Precios.csv', row.names = FALSE, fileEncoding = 'UTF-8')
+
+```
+
+# Kernel
+
+### Epanechnikov
+
+$$K(t) = \frac{3}{4}(1 - t^2) \text{ con } |t| < 1$$
+
+```{r}
+# Soporte
+t <- seq(from = -1.0, to = 1.0, by = 0.1)
+
+# Kernel
+K <- (3/4) * (1 - t^2)
+
+```
+
+```{r}
+# Datos
+data <- data.frame(t = t, K = K)
+
+# Gráfica Kernel
+ggplot(data, aes(x = t, y = K)) +
+  geom_line(color = 'darkblue') +
+  labs(title = 'Kernel Epanechnikov', x = 't', y = 'K') +
+  theme_minimal(base_family = 'Times New Roman') +
+  theme(
+    plot.title = element_text(hjust = 0.5, vjust = 1, size = 14, color = 'black'),
+    axis.title = element_text(size = 14, color = 'black'),
+    axis.text = element_text(size = 12, color = 'black')
+  ) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(aspect.ratio = 1)
+
+# Ajustar tamaño de la gráfica
+ggsave("Kernel_Epanechnikov.png", width = 5, height = 5)
+
+```
+
+### Gauss:
+
+$$K(t) = \frac{1}{\sqrt{2 \pi}} e^{-\frac{1}{2} t^2} \text{ con } |t| < \infty$$
+
+```{r}
+# Soporte
+t <- seq(from = -3.0, to = 3.0, by = 0.1)
+
+# Kernel
+K <- (1 / (2 * pi)) * (exp(-0.5 * t^2))
+
+```
+
+```{r}
+# Datos
+data <- data.frame(t = t, K = K)
+
+# Gráfica Kernel
+ggplot(data, aes(x = t, y = K)) +
+  geom_line(color = 'darkblue') +
+  labs(title = 'Kernel Gauss', x = 't', y = 'K') +
+  theme_minimal(base_family = 'Times New Roman') +
+  theme(
+    plot.title = element_text(hjust = 0.5, vjust = 1, size = 14, color = 'black'),
+    axis.title = element_text(size = 14, color = 'black'),
+    axis.text = element_text(size = 12, color = 'black')
+  ) +
+  theme(plot.title = element_text(hjust = 0.5)) +
+  theme(aspect.ratio = 1)
+
+# Ajustar tamaño de la gráfica
+ggsave("Kernel_Gauss.png", width = 5, height = 5)
+
+```
+
+### Aplicación de Kernel Gaussiano
+
+```{r}
+# Revisemos los datos:
+head(Gasolinerias_Precios)
+
+```
+
+```{r}
+# ¿Qué tipo de datos tenemos?
+str(Gasolinerias_Precios)
+
+```
+
+```{r}
+# Seleccionemos tipo de combustible
+Combustible <- 'regular' # regular, premium, diesel
+
+# Seleccionamos GRID:
+grid <- seq(15, 30, length.out = 200) # valor_min, valor_max, particiones
+
+# Definir la variable X
+X <- Gasolinerias_Precios[ , c(Combustible) ] %>%
+  as.numeric()
+
+# Empezar la gráfica
+plot_data <- data.frame(X) %>%
+  filter( X > 15 )
+
+X <- plot_data$X
+
+# Crear la gráfica base
+p <- ggplot(plot_data, aes(x = X)) +
+  geom_rug() +
+  labs(title = paste('Gráfica de densidad de gasolina tipo', Combustible),
+       x = 'Precio MXN',
+       y = 'Probability Density') +
+  theme_minimal(base_size = 15)
+
+# Añadir diferentes anchos de banda
+for (bandwidth in c(0.1, 0.5, 1)) {
+  kde <- density(X, bw = bandwidth, kernel = "epanechnikov") # "gaussian", "epanechnikov", "rectangular"
+  kde_data <- data.frame(x = kde$x, y = kde$y)
+  p <- p + geom_line(data = kde_data, aes(x = x, y = y), color = 10*bandwidth) +
+    annotate("text", x = max(grid), y = max(kde$y), label = paste('bw =', bandwidth), 
+             size = 3, color = 10*bandwidth)
+}
+
+# Mostrar la gráfica
+p
+
+```
+
+## Prueba Kolmogorov-Smirnov para 2 samples
+
+Esta es una prueba para la hipótesis nula de que se extraen 2 muestras independientes de la misma distribución continua. La hipótesis alternativa puede ser "bilateral", "menor" o "mayor". Alterntivamente:
+
+\begin{eqnarray*}
+    H_0 & : & \text{Las distribuciones son iguales} \\
+    H_1 & : & \text{Las distribuciones son distintas}
+\end{eqnarray*}
+
+```{r}
+# Retomemos nuestro Data Frame de Precios de gasolinas
+
+head(Gasolinerias_Precios)
+
+```
+
+```{r}
+# Seleccionamos 2 muestras con reemplazo
+
+set.seed(123)  # Para reproducibilidad
+Sample_1 <- sample(na.omit(Gasolinerias_Precios$regular), size = 50, replace = TRUE)
+
+# Mostrar las primeras filas de la muestra
+head(Sample_1)
+
+```
+
+```{r}
+# Seleccionamos otra muestra con reemplazo
+
+set.seed(321)  # Para reproducibilidad
+Sample_2 <- sample(na.omit(Gasolinerias_Precios$regular), size = 50, replace = TRUE)
+
+# Mostrar las primeras filas de la muestra
+head(Sample_2)
+
+```
+
+```{r}
+# Asegurarse de que las muestras sean vectores numéricos
+Sample_1 <- as.numeric(Sample_1)
+Sample_2 <- as.numeric(Sample_2)
+
+# Realizamos la prueba
+
+ks.test(Sample_1, Sample_2, alternative = 'two.sided')  # 'two.sided', 'less', 'greater'
+
+```
+
+```{r}
+#
+ks.test(Sample_1, Sample_2 + 0.001, alternative = 'two.sided')  # 'two.sided', 'less', 'greater'
+```
+
+```{r}
+# Crear un data frame combinando los dos arreglos
+# Calcular densidades
+densidad1 <- density(Sample_1, bw = 0.1, kernel = "gaussian" )
+densidad2 <- density(Sample_2, bw = 0.1, kernel = "gaussian")
+
+# Crear un data frame con los valores de densidad
+df_densidad <- data.frame(
+  x = c(densidad1$x, densidad2$x),
+  y = c(densidad1$y, densidad2$y),
+  grupo = rep(c("Sample 1", "Sample 2"), 
+              times = c(length(densidad1$x), length(densidad2$x)))
+)
+
+# Graficar con ggplot
+ggplot(df_densidad, aes(x = x, y = y, color = grupo, fill = grupo)) +
+  geom_line(linewidth = 1) +
+  geom_area(alpha = 0.3, position = "identity") +
+  labs(title = "Densidad de Kernel con density()", 
+       x = "Valor", y = "Densidad") +
+  theme_minimal()
+```
+
+```{r}
+# Seleccionamos 2 muestras con reemplazo pero para zonas del país
+
+# NOROESTE
+Sample_NO <- Gasolinerias_Precios %>%
+  filter(as.numeric(lat) > 28 & as.numeric(lng) < -104) %>%
+  pull(regular) %>%
+  na.omit()
+
+# Mostrar las primeras filas de la muestra
+head(Sample_NO)
+
+```
+
+```{r}
+# PENÍNSULA
+Sample_PE <- Gasolinerias_Precios %>%
+  filter(as.numeric(lng) > -91) %>%
+  pull(regular) %>%
+  na.omit()
+
+# Mostrar las primeras filas de la muestra
+head(Sample_PE)
+
+```
+
+```{r}
+# Convertir a vectores numéricos si aún no lo son
+Sample_NO <- as.numeric(Sample_NO)
+Sample_PE <- as.numeric(Sample_PE)
+
+# Realizamos la prueba
+ks.test(Sample_NO, Sample_PE, alternative = 'two.sided')  # 'two.sided', 'less', 'greater'
+```
+
+```{r}
+# Crear un data frame combinando los dos arreglos
+# Calcular densidades
+densidad1 <- density(Sample_NO, bw = 0.1, kernel = "gaussian" )
+densidad2 <- density(Sample_PE, bw = 0.1, kernel = "gaussian")
+
+# Crear un data frame con los valores de densidad
+df_densidad <- data.frame(
+  x = c(densidad1$x, densidad2$x),
+  y = c(densidad1$y, densidad2$y),
+  grupo = rep(c("Sample NO", "Sample PE"), 
+              times = c(length(densidad1$x), length(densidad2$x)))
+)
+
+# Graficar con ggplot
+ggplot(df_densidad, aes(x = x, y = y, color = grupo, fill = grupo)) +
+  geom_line(linewidth = 1) +
+  geom_area(alpha = 0.3, position = "identity") +
+  labs(title = "Densidad de Kernel con density()", 
+       x = "Valor", y = "Densidad") +
+  theme_minimal()
+```
+
+
+```{r}
+#
+ks.test(Sample_NO, Sample_PE - 0.1, alternative = 'two.sided')  # 'two.sided', 'less', 'greater'
+```

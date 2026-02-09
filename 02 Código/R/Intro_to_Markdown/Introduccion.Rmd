@@ -1,0 +1,88 @@
+---
+title: "Intoduccion a R-Markdown"
+author: "Benjamín Oliva"
+date: "2025-02-20"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("rmarkdown")
+library(rmarkdown)
+
+#getwd()
+#setwd("/Users/benjamin/Documents/Personal/Cursos_CIDE/Estadistica_II_2025/Estadistica_II_2025/02 Código/R/Intro_to_Markdown")
+#render("Introduccion.Rmd")
+```
+
+## R Markdown
+
+R Markdown ofrece un marco de creación para la ciencia de datos. Puede utilizar un único archivo R Markdown para:
+
+* Guardar y ejecutar código
+
+* Generar informes de alta calidad que se puedan compartir con una audiencia
+
+Los documentos R Markdown son totalmente reproducibles y admiten docenas de formatos de salida estáticos y dinámicos. 
+
+## Chunks de código
+Puede insertar rápidamente fragmentos de código en su archivo con
+
+* El atajo de teclado Ctrl + Alt + I (OS X: Cmd + Opción + I)
+
+* El comando Agregar fragmento en la barra de herramientas del editor
+
+* O escribiendo los delimitadores de fragmento ```{r} y ```.
+
+Cuando renderiza su archivo .Rmd, R Markdown ejecutará cada fragmento de código e incrustará los resultados debajo del fragmento de código en su informe final.
+
+Opciones de chunk: La salida del fragmento se puede personalizar con opciones de knitr, argumentos establecidos en el {} de un encabezado de fragmento.Usamos cinco argumentos:
+
+* include = FALSE evita que el código y los resultados aparezcan en el archivo final. R Markdown aún ejecuta el código en el fragmento y los resultados pueden ser utilizados por otros fragmentos.
+
+* echo = FALSE evita que el código, pero no los resultados, aparezcan en el archivo final. Esta es una forma útil de incrustar figuras.
+
+* message = FALSE evita que los mensajes generados por el código aparezcan en el archivo final.
+
+* warning = FALSE evita que las advertencias generadas por el código aparezcan en el resultado final.
+
+* fig.cap = "..." agrega un título a los resultados gráficos.
+
+Para establecer opciones globales que se apliquen a cada fragmento de código de su archivo, llame a knitr::opts_chunk$set en un fragmento de código. Knitr tratará cada opción que pase a knitr::opts_chunk$set como un valor predeterminado global que se puede sobrescribir en los encabezados de fragmentos individuales.
+
+## Example: Including Plots
+
+```{r cars}
+summary(cars)
+```
+
+Agregando gráfica:
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+knitr puede ejecutar código en muchos lenguajes además de R. Algunos de los motores de lenguaje disponibles incluyen:
+
+* Python
+
+* SQL
+
+* Bash
+
+* Rcpp
+
+* Stan
+
+* JavaScript
+
+* CSS
+
+* TODOS LOS DISPONIBLES: https://bookdown.org/yihui/rmarkdown/language-engines.html
+
+Para procesar un fragmento de código utilizando un motor de lenguaje alternativo, reemplace la r al comienzo de la declaración del fragmento con el nombre del lenguaje:
+
+```{bash}
+#
+```
+

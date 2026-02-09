@@ -1,0 +1,379 @@
+---
+title: "Clase 3. Pasajeros y otras características del Metro en la CDMX"
+author: "Benjamin Oliva"
+date: "01/04/2025"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+### Dependencies and Setup
+```{r setup, include = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages("readxl")
+# 
+library(ggplot2)
+library(dplyr)
+library(readxl)
+
+```
+
+# Importamos Datos:
+
+Los datos importados son:
+
+* Pasajeros_Millones: Pasajeros transportados (Millones) en el Metro de la CDMX
+* TrenesEnServicio_Unidades: Trenes que están en servicio (Unidades) en el Metro de la CDMX
+* KilometrosRedEnServicio: Kilómetros de red en servicio en el Metro de la CDMX
+* KilometrosRecorridos_Miles: Kilómetros recorridos en el sistema del Metro de la CDMX
+
+Fuente: INEGI, https://www.inegi.org.mx/app/indicadores/?tm=0#D668903
+
+```{r}
+
+Datos <- read_excel("Base_Transporte.xlsx", sheet = "Datos", col_names = TRUE)
+
+Fecha = as.Date(Datos$Periodo, format = "%d/%m/%Y")
+
+head(Datos)
+
+```
+
+# Repaso de manejo de Data Frames:
+
+```{r}
+
+#View(Datos)
+
+names(Datos)
+
+tail(Datos)
+
+str(Datos)
+
+dim(Datos)
+
+Datos[ , 2]
+
+Datos[5 , ]
+
+Datos[c(2:259) , 2]
+
+Datos[ , c(2:5)]
+
+Datos[ , c(2, 3, 4, 5)]
+
+Datos[c("Pasajeros_Millones", "TrenesEnServicio_Unidades")]
+
+```
+
+# Tabla de estadísticas decriptivas
+
+```{r}
+
+summary( Datos[ ,c(2:5)] )
+
+#Resumen1 <- summary(Datos[ ,c(2:5)])
+
+#Resumen1
+
+```
+
+# Graficas:
+
+```{r, echo = FALSE}
+
+ggplot(data = Datos, aes(x = Fecha, y = Pasajeros_Millones)) + 
+  geom_line(linewidth = 0.5, color = "darkblue") +
+  #geom_point(size = 1.0, color = "darkblue") + 
+  #theme_bw() + 
+  xlab("Tiempo") + 
+  ylab("Millones de pasajeros") + 
+  theme(plot.title = element_text(size = 11, face = "bold", hjust = 0)) + 
+  theme(plot.subtitle = element_text(size = 10, hjust = 0)) + 
+  theme(plot.caption = element_text(size = 10, hjust = 0)) +
+  theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+  labs(
+    title = "Pasajeros transportados en el Metro de la CDMX",
+    subtitle = "(Ene-2000 a Ene-2025)",
+    caption = "Fuente: Elaboración propia con información del INEGI, \nhttps://www.inegi.org.mx/app/indicadores/?tm=0&t=1090"
+  )
+#
+ggsave("Pax_Metro.png", width = 20, height = 15, units = "cm")
+
+```
+
+
+```{r, echo = FALSE}
+
+ggplot(data = Datos, aes(x = Fecha, y = TrenesEnServicio_Unidades)) + 
+  geom_line(linewidth = 0.5, color = "darkred") +
+  #geom_point(size = 1.0, color = "darkblue") + 
+  #theme_bw() + 
+  xlab("Tiempo") + 
+  ylab("Millones de pasajeros") + 
+  theme(plot.title = element_text(size = 11, face = "bold", hjust = 0)) + 
+  theme(plot.subtitle = element_text(size = 10, hjust = 0)) + 
+  theme(plot.caption = element_text(size = 10, hjust = 0)) +
+  theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+  labs(
+    title = "Trenes en servicio en el Metro de la CDMX",
+    subtitle = "(Ene-2000 a Ene-2025)",
+    caption = "Fuente: Elaboración propia con información del INEGI, \nhttps://www.inegi.org.mx/app/indicadores/?tm=0&t=1090"
+  )
+#
+ggsave("Trains_Metro.png", width = 20, height = 15, units = "cm")
+
+```
+
+```{r, echo = FALSE}
+
+ggplot(data = Datos, aes(x = Fecha, y = KilometrosRedEnServicio)) + 
+  geom_line(linewidth = 0.5, color = "darkgreen") +
+  #geom_point(size = 1.0, color = "darkblue") + 
+  #theme_bw() + 
+  xlab("Tiempo") + 
+  ylab("Millones de pasajeros") + 
+  theme(plot.title = element_text(size = 11, face = "bold", hjust = 0)) + 
+  theme(plot.subtitle = element_text(size = 10, hjust = 0)) + 
+  theme(plot.caption = element_text(size = 10, hjust = 0)) +
+  theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+  labs(
+    title = "Kilómetros de red en servicio en el Metro de la CDMX",
+    subtitle = "(Ene-2000 a Ene-2025)",
+    caption = "Fuente: Elaboración propia con información del INEGI, \nhttps://www.inegi.org.mx/app/indicadores/?tm=0&t=1090"
+  )
+#
+ggsave("KmRed_Metro.png", width = 20, height = 15, units = "cm")
+
+```
+
+```{r, echo = FALSE}
+
+ggplot(data = Datos, aes(x = Fecha, y = KilometrosRecorridos_Miles)) + 
+  geom_line(linewidth = 0.5, color = "darkorange") +
+  #geom_point(size = 1.0, color = "darkblue") + 
+  #theme_bw() + 
+  xlab("Tiempo") + 
+  ylab("Millones de pasajeros") + 
+  theme(plot.title = element_text(size = 11, face = "bold", hjust = 0)) + 
+  theme(plot.subtitle = element_text(size = 10, hjust = 0)) + 
+  theme(plot.caption = element_text(size = 10, hjust = 0)) +
+  theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+  labs(
+    title = "Kilómetros recorridos (Miles) en el Metro de la CDMX",
+    subtitle = "(Ene-2000 a Ene-2025)",
+    caption = "Fuente: Elaboración propia con información del INEGI, \nhttps://www.inegi.org.mx/app/indicadores/?tm=0&t=1090"
+  )
+#
+ggsave("KmRecord_Metro.png", width = 20, height = 15, units = "cm")
+
+```
+
+### Creamos una nueva variable: Pasajeros por kilómetro recorrido
+
+```{r}
+
+Datos$Pax_Km <- Datos$Pasajeros_Millones / (Datos$KilometrosRecorridos_Miles/1000)
+
+```
+
+```{r, echo = FALSE}
+
+ggplot(data = Datos, aes(x = Fecha, y = Pax_Km)) + 
+  geom_line(linewidth = 0.5, color = "gold") +
+  #geom_point(size = 1.0, color = "darkblue") + 
+  #theme_bw() + 
+  xlab("Tiempo") + 
+  ylab("Millones de pasajeros") + 
+  theme(plot.title = element_text(size = 11, face = "bold", hjust = 0)) + 
+  theme(plot.subtitle = element_text(size = 10, hjust = 0)) + 
+  theme(plot.caption = element_text(size = 10, hjust = 0)) +
+  theme(plot.margin = unit(c(1,1,1,1), "cm")) +
+  labs(
+    title = "Pasajeros por kilómetro recorrido en el Metro de la CDMX",
+    subtitle = "(Ene-2000 a Ene-2025)",
+    caption = "Fuente: Elaboración propia con información del INEGI, \nhttps://www.inegi.org.mx/app/indicadores/?tm=0&t=1090"
+  )
+#
+ggsave("Pax_Km.png", width = 20, height = 15, units = "cm")
+
+```
+
+# Tabla de estadisticas de caracterización de los kilómetros recorridos (Miles) en el Metro de la CDMX
+
+## Tres períodos: 
+
+1. Antes de la línea 12 (Fecha de Inauguración: 30 de octubre de 2012)
+```{r}
+
+Linea12 <- subset(Datos, Fecha <= as.Date("01/10/2012", format = "%d/%m/%Y"))
+
+dim(Linea12)
+
+```
+
+2. Después de la línea 12 (Fecha de Inauguración: 30 de octubre de 2012) y antes de la pandemía de Covid-19 (enero de 2020)
+```{r}
+
+PreCovid19 <- subset(Datos, Fecha > as.Date("01/10/2012", format = "%d/%m/%Y") & Fecha <= as.Date("01/01/2020", format = "%d/%m/%Y") )
+
+dim(PreCovid19)
+
+```
+
+3. Post pandemía de Covid-19 (enero de 2020)
+```{r}
+
+PostCovid19 <- subset(Datos, Fecha > as.Date("01/01/2020", format = "%d/%m/%Y") )
+
+dim(PostCovid19)
+
+```
+
+## Tabla de estadisticas de caracterización de los tres data sets
+
+```{r}
+
+Tabla_Pax_Metro <- data.frame(matrix( c( "Media", "Varianza", "n" ), 
+                                      nrow = 3, ncol = 1) )
+
+#
+names(Tabla_Pax_Metro) <- c("Estadistica")
+
+Tabla_Pax_Metro
+```
+
+```{r}
+
+
+Tabla_Pax_Metro$M_01 <- 0
+
+Tabla_Pax_Metro$M_02 <- 0
+
+Tabla_Pax_Metro$M_03 <- 0
+
+Tabla_Pax_Metro
+
+```
+
+## Llenado de la tabla:
+
+```{r}
+# Medias
+Tabla_Pax_Metro[1, 2] <- round(mean(Linea12$KilometrosRecorridos_Miles), digits = 2)
+Tabla_Pax_Metro[1, 3] <- round(mean(PreCovid19$KilometrosRecorridos_Miles), digits = 2)
+Tabla_Pax_Metro[1, 4] <- round(mean(PostCovid19$KilometrosRecorridos_Miles), digits = 2)
+# Varianzas muestrales
+Tabla_Pax_Metro[2, 2] <- round(sum( ( Linea12$KilometrosRecorridos_Miles - mean(Linea12$KilometrosRecorridos_Miles) )^2) / (length(Linea12$KilometrosRecorridos_Miles) - 1), digits = 2)
+Tabla_Pax_Metro[2, 3] <- round(sum( ( PreCovid19$KilometrosRecorridos_Miles - mean(PreCovid19$KilometrosRecorridos_Miles) )^2) / (length(PreCovid19$KilometrosRecorridos_Miles) - 1), digits = 2)
+Tabla_Pax_Metro[2, 4] <- round(sum( ( PostCovid19$KilometrosRecorridos_Miles - mean(PostCovid19$KilometrosRecorridos_Miles) )^2) / (length(PostCovid19$KilometrosRecorridos_Miles) - 1), digits = 2)
+# 
+Tabla_Pax_Metro[3, 2] <- length(Linea12$KilometrosRecorridos_Miles)
+Tabla_Pax_Metro[3, 3] <- length(PreCovid19$KilometrosRecorridos_Miles)
+Tabla_Pax_Metro[3, 4] <- length(PostCovid19$KilometrosRecorridos_Miles)
+#
+Tabla_Pax_Metro
+
+```
+
+## Pruebas de Hipótesis:
+
+\begin{eqnarray}
+    H_0 & : & \mu_1 - \mu_2 = \delta \nonumber \\
+    H_a & : & \mu_1 - \mu_2 \neq \delta 
+\end{eqnarray}
+
+Para lo cual hay que probar primero:
+\begin{eqnarray}
+    H_0 & : & \sigma^2_1 = \sigma^2_2 \nonumber \\
+    H_a & : & \sigma^2_1 \neq \sigma^2_2 
+\end{eqnarray}
+
+Por que necesitamos construir una transformación para todo para de muestras:
+\begin{eqnarray*}
+    F & = & \frac{ \hat{\sigma}^2_2 \sigma^2_1 }{ \hat{\sigma}^2_1 \sigma^2_2 } \sim f_{[n_1 - 1, n_2 - 1]} \\
+    & & \text{que bajo $H_0$:} \\
+    & = & \frac{ \hat{\sigma}^2_2 }{ \hat{\sigma}^2_1 } 
+\end{eqnarray*}
+
+De acuerdo con la tabla de F de Fisher, tenemos que:
+\begin{eqnarray*}
+    f_{[\alpha/2, n_1 - 1, n_2 - 1]} &  & \text{para el límite superior} \\
+    f_{[1 - \alpha/2, n_1 - 1, n_2 - 1]} & = & \frac{1}{f_{[\alpha/2, n_2 - 1, n_1 - 1]}} \\
+    &  & \text{para el límite inferior}
+\end{eqnarray*}
+
+Después tendremos que, con los datos proporcionados, calcular:
+\begin{equation*}
+    \hat{\sigma}_p = \sqrt{ \frac{ (n_1 - 1)\hat{\sigma}^2_1 + (n_2 - 1)\hat{\sigma}^2_2 }{n_1 + n_2 - 2} } 
+\end{equation*}
+
+Por lo tanto, requerimos calcular:
+\begin{equation*}
+    T = \frac{ (\overline{X}_1 - \overline{X}_2) - (\mu_1 - \mu_2) }{ \hat{\sigma}_p  \sqrt{ \frac{1}{n_1} + \frac{1}{n_2} } } 
+\end{equation*}
+
+Y determinar el estadístico $t_{\alpha, n_1 + n_2 -2}$ de tablas para límite superior y como límite inferior $-t_{\alpha, n_1 + n_2 -2}$.
+
+## Comparación entre el período el pre-Covid19 y pre-línea 12
+
+```{r}
+
+F_PreCovid19_Linea12 <- Tabla_Pax_Metro[2, 3] / Tabla_Pax_Metro[2, 2]
+
+IC <- c( 1 / qf(p = 0.975, df1 = Tabla_Pax_Metro[3, 2] - 1, df2 = Tabla_Pax_Metro[3, 3] - 1,
+                lower.tail = TRUE), 
+         qf( p = 0.975, df1 = Tabla_Pax_Metro[3, 3] - 1, df2 = Tabla_Pax_Metro[3, 2] - 1, 
+             lower.tail = TRUE) )
+
+paste0( F_PreCovid19_Linea12, " está dentro del intervalo:", "(", IC[1], ",", IC[2], ")", sep = " " )
+
+```
+
+```{r}
+
+Sigma_p_PreCovid19_Linea12 <- sqrt( ( (Tabla_Pax_Metro[3, 3] - 1)*(Tabla_Pax_Metro[2, 3]) + (Tabla_Pax_Metro[3, 2] - 1)*(Tabla_Pax_Metro[2, 2]) ) / (Tabla_Pax_Metro[3, 3] + Tabla_Pax_Metro[3, 2] - 2) )
+  
+T_PreCovid19_Linea12 <- (Tabla_Pax_Metro[1, 3] - Tabla_Pax_Metro[1, 2]) / ( Sigma_p_PreCovid19_Linea12 * sqrt((1/Tabla_Pax_Metro[3, 3]) + (1 / Tabla_Pax_Metro[3, 2])) )
+
+IC <- c( - qt( p = 0.975, df = Tabla_Pax_Metro[3, 3] + Tabla_Pax_Metro[3, 2] - 2, lower.tail = TRUE), 
+         qt( p = 0.975, df = Tabla_Pax_Metro[3, 3] + Tabla_Pax_Metro[3, 2] - 2, lower.tail = TRUE) ) 
+
+paste0( T_PreCovid19_Linea12, " está fuera del intervalo:", "(", IC[1], ",", IC[2], ")", sep = " " )
+
+```
+## Comparación entre el período post-Covid19 y el pre-Covid19
+
+```{r}
+
+F_PostCovid19_PreCovid19 <- Tabla_Pax_Metro[2, 4] / Tabla_Pax_Metro[2, 3]
+
+IC <- c( 1 / qf(p = 0.975, df1 = Tabla_Pax_Metro[3, 3] - 1, df2 = Tabla_Pax_Metro[3, 4] - 1,
+                lower.tail = TRUE), 
+         qf( p = 0.975, df1 = Tabla_Pax_Metro[3, 4] - 1, df2 = Tabla_Pax_Metro[3, 3] - 1, 
+             lower.tail = TRUE) )
+
+paste0( F_PostCovid19_PreCovid19, " está fuera del intervalo:", "(", IC[1], ",", IC[2], ")", sep = " " )
+
+```
+
+# Tarea 1:
+
+Pruebe si el promedio de pasajeros transportados en el Metro de la CDMX fue el mismo comparando los tres periodos: antes de la caída de la línea 12, en el preriodo intermedio entre la caída de la línea 12 y en inicio de la pandemia de Covid19 y el periodo post Covid19. 
+
+Elabore un reporte que incluya:
+
+1. Una breve discusión de cómo abordará el problema planteado.
+
+2. Las pruebas estadísticas que considere necesarias.
+
+3. Una conclusión.
+
+Fecha de entrega: 21 de abril de 2025 por correo electrónico.
+
+
+

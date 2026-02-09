@@ -1,0 +1,196 @@
+---
+title: "Clase 4. Minado de datos de la ENIGH"
+author: "Benjamin Oliva"
+date: "01/04/2025"
+output: html_document
+editor_options: 
+  chunk_output_type: inline
+---
+
+### Dependencies and Setup
+```{r setup, include = FALSE, warning = FALSE, message = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+#install.packages("ggplot2")
+#install.packages("dplyr")
+#install.packages("readxl")
+#install.packages("writexl")
+#Do you want to install from sources the package which needs compilation? (Yes/no/cancel) no
+#install.packages("Hmisc")
+#Do you want to install from sources the package which needs compilation? (Yes/no/cancel) no
+#install.packages("survey")
+#Do you want to install from sources the package which needs compilation? (Yes/no/cancel) no
+#install.packages("srvyr")
+# 
+library(ggplot2)
+library(dplyr)
+library(readxl)
+library(Hmisc)
+library(survey)
+library(srvyr)
+library(writexl)
+
+```
+
+# Importamos Datos:
+
+Utilizaremos datos de la Encuesta Nacional de Ingresos y Gastos de los Hogares para los años 2016, 2018, 2020 y 2022.
+
+Documentación: https://www.inegi.org.mx/programas/enigh/nc/2022/#microdatos
+
+```{r}
+
+# Ruta al archivo ZIP
+zip_file <- "enigh2016_ns_concentradohogar_csv.zip"
+
+# Lista de archivos dentro del ZIP (puedes revisar el nombre exacto del CSV)
+unzip(zip_file, list = TRUE)
+
+# Leer directamente el CSV (si conoces el nombre del archivo)
+concentrado_2016 <- read.csv(unz(zip_file, "concentradohogar.csv"))
+
+# Verificamos
+head(concentrado_2016)
+
+```
+
+```{r}
+
+dim(concentrado_2016)
+
+```
+
+
+```{r}
+
+# Crear los puntos de corte (deciles)
+decil_cortes <- wtd.quantile( concentrado_2016$ing_cor, 
+                              weights = concentrado_2016$factor, 
+                              probs = seq(0, 1, 0.1))
+
+decil_cortes
+```
+
+```{r}
+# Asignar decil a cada observación
+concentrado_2016 <- concentrado_2016 %>%
+  mutate(decil = cut(ing_cor, breaks = decil_cortes, include.lowest = TRUE, labels = 1:10))
+
+```
+
+```{r, echo = FALSE}
+
+# Seleccionamos diversa información, icluído el gasto trimestral en cuidados de salud
+
+concentrado_2016_SEL <- concentrado_2016[ c( 'folioviv', 'foliohog', 'factor', 'ing_cor', 'decil', 'gasto_mon', 'salud' ) ]
+
+dim(concentrado_2016_SEL)
+
+```
+
+```{r}
+
+# Crear un diseño de encuesta con pesos
+diseno <- svydesign(ids = ~1, data = concentrado_2016_SEL, weights = ~factor)
+
+# Tabla de frecuencias ponderada
+svytable(~decil, design = diseno)
+
+```
+
+```{r}
+
+# Filtrar valores de salud > 0
+datos_filtrados <- concentrado_2016_SEL %>% filter(salud > 0)
+
+dim(datos_filtrados)
+
+```
+
+```{r}
+# Convertir a diseño compatible con dplyr
+diseno_srvyr <- as_survey_design(datos_filtrados, weights = factor)
+
+# Resumen por decil
+resumen <- diseno_srvyr %>%
+  group_by(decil) %>%
+  summarize(
+    n = survey_total(!is.na(salud)),
+    suma = survey_total(salud),
+    media = survey_mean(salud),
+    sd = survey_sd(salud),
+    minimo = survey_quantile(salud, 0, ci = FALSE),
+    maximo = survey_quantile(salud, 1, ci = FALSE)
+  )
+
+#resumen
+
+resumen[ c( "decil", "n", "suma", "media", "sd", "minimo_q00", "maximo_q100" )]
+
+```
+
+```{r}
+# Convertir a diseño compatible con dplyr
+diseno_srvyr <- as_survey_design(datos_filtrados, weights = factor)
+
+# Resumen por decil
+resumen <- diseno_srvyr %>%
+  group_by(decil) %>%
+  summarize(
+    n = survey_total(!is.na(ing_cor)),
+    suma = survey_total(ing_cor),
+    media = survey_mean(ing_cor),
+    sd = survey_sd(ing_cor),
+    minimo = survey_quantile(ing_cor, 0, ci = FALSE),
+    maximo = survey_quantile(ing_cor, 1, ci = FALSE)
+  )
+
+#resumen
+
+resumen[ c( "decil", "n", "suma", "media", "sd", "minimo_q00", "maximo_q100" )]
+
+```
+
+
+```{r}
+# Convertir a diseño compatible con dplyr
+diseno_srvyr <- as_survey_design(datos_filtrados, weights = factor)
+
+# Resumen por decil
+resumen <- diseno_srvyr %>%
+  group_by(decil) %>%
+  summarize(
+    n = survey_total(!is.na(gasto_mon)),
+    suma = survey_total(gasto_mon),
+    media = survey_mean(gasto_mon),
+    sd = survey_sd(gasto_mon),
+    minimo = survey_quantile(gasto_mon, 0, ci = FALSE),
+    maximo = survey_quantile(gasto_mon, 1, ci = FALSE)
+  )
+
+#resumen
+
+resumen[ c( "decil", "n", "suma", "media", "sd", "minimo_q00", "maximo_q100" )]
+
+```
+
+```{r}
+
+# Guardar el dataframe en un archivo Excel
+write_xlsx(concentrado_2016_SEL, "concentrado_2016_SEL.xlsx")
+
+```
+
+
+## Tarea:
+
+Replica este código para los archivos:
+
+1. enigh2018_ns_concentradohogar_csv.zip
+
+2. enigh2020_ns_concentradohogar_csv.zip
+
+3. enigh2022_ns_concentradohogar_csv.zip
+
+Entregable: el código implementado, Fecha de Entrega: 21 de abril de 2025 por correo electrónico.
+

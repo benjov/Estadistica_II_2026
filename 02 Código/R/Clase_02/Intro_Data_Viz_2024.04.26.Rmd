@@ -1,0 +1,184 @@
+---
+title: "Intro_Data_VIz"
+author: "Benjamín Oliva"
+date: "2024-04-26"
+output: html_document
+---
+
+# Qué son los R Markdown
+
+Los documentos de R Markdown son una interfaz de cuaderno productiva para entrelazar texto narrativo y código para producir resultados. 
+
+Permite utilizar varios lenguajes, incluidos R, Python y SQL (consulte la lista completa en: https://bookdown.org/yihui/rmarkdown/language-engines.html)
+
+R Markdown proporciona un marco de creación para la ciencia de datos. Puede utilizar un único archivo R Markdown para guardar y ejecutar código y generar informes de alta calidad que se pueden compartir con su audiencia.
+
+Los documentos de R Markdown son totalmente reproducibles y admiten docenas de formatos de salida estáticos y dinámicos, incluidos HTML, PDF, MS Word, Beamer, diapositivas HTML5, folletos estilo Tufte, libros, paneles, shiny apps, artículos científicos, sitios web y más.
+
+# Chunk Options
+* include = FALSE 
+(evita que el código y los resultados aparezcan en el archivo terminado. R Markdown aún ejecuta el código en el fragmento y los resultados pueden ser utilizados por otros fragmentos)
+
+* echo = FALSE 
+(evita que el código, pero no los resultados, aparezcan en el archivo terminado. Esta es una forma útil de incrustar figuras)
+
+* message = FALSE 
+(evita que los mensajes generados por código aparezcan en el archivo terminado)
+
+* warning = FALSE 
+(evita que las advertencias generadas por el código aparezcan en el final)
+
+* fig.cap = "..." 
+(agrega un título a los resultados gráficos)
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE) # Valor predeterminado global para los encabezados de chunks
+#install.packages("rmarkdown")
+#library(rmarkdown)
+```
+
+# Ejemplo de consulta de Precios Marginales Locales
+
+* MDA: Mercado de día en adelanto
+* MTR: Mercado en tiempo real
+
+Fuente de datos: https://www.cenace.gob.mx/Paginas/SIM/Reportes/PreEnerServConMDA.aspx
+
+Usaremos el "Manual Técnico Uso de Servicio Web para descarga de Precios Marginales Locales (SW-PML)", https://www.cenace.gob.mx/DocsMEM/2022-06-24%20Manual%20T%C3%A9cnico%20SW-PML.pdf
+
+## Instalación de paquetaría
+
+```{r paquetes, include = TRUE, warning = FALSE, message = FALSE }
+#install.packages("plotly") # Paquetería de visualización interactiva
+#install.packages("httr") # Biblioteca que tiene funciones para consulta Web
+# Do you want to install from sources the package which needs compilation? (Yes/no/cancel) Y
+#install.packages("jsonlite") # Para manejo de archivos JSON
+#install.packages("DT") # Para manejo de tablas
+
+library(plotly) 
+library(httr) 
+library(jsonlite) 
+library(DT) 
+```
+
+## Consulta:
+
+Consultaremos un conjunto de nodos ubicados en distintos puntos de México
+(la lista completa está en: https://www.cenace.gob.mx/Paginas/SIM/NodosP.aspx)
+
+IMPORTANTE: No se pueden mostrar datos con un lapso mayor a 7 dias y máximo 20 nodos
+
+```{r nodos, echo=FALSE}
+Nodos <- paste0( "08MDN-115", ",", "01NEC-85", ",", "01ITD-115", ",", "01PCC-85", ",", "06PTA-138")
+
+Nodos
+```
+
+```{r API, echo=FALSE, warning = FALSE}
+# Definir los parámetros de la URL
+sistema <- "SIN"
+proceso <- "MDA"
+lista_nodos <- Nodos
+anio_ini <- "2024"
+mes_ini <- "04"
+dia_ini <- "15"
+anio_fin <- "2024"
+mes_fin <- "04"
+dia_fin <- "21"
+formato <- "JSON"
+
+# Construir la URL de invocación
+url <- paste0("https://ws01.cenace.gob.mx:8082/SWPML/SIM/",
+              sistema, "/", proceso, "/", lista_nodos, "/",
+              anio_ini, "/", mes_ini, "/", dia_ini, "/",
+              anio_fin, "/", mes_fin, "/", dia_fin, "/",
+              formato)
+
+# Realizar la solicitud GET al servicio web
+respuesta <- GET(url)
+
+# Convertir el JSON en un DataFrame
+datos <- fromJSON(content(respuesta, "text"), flatten = TRUE)
+
+# Convertir la lista anidada "Resultados" en un DataFrame
+resultados_df <- datos$Resultados
+
+# Utilizar lapply para extraer DataFrames contenidos en la columna 'lista_de_dataframes'
+dataframes_extraidos <- lapply(resultados_df$Valores, function(x) as.data.frame(x))
+
+#dataframes_extraidos
+```
+
+```{r datos, echo=FALSE, warning = FALSE}
+
+Datos_PML <- as.data.frame( cbind( Fecha = dataframes_extraidos[[1]]$fecha,
+                                   Hora = dataframes_extraidos[[1]]$hora,
+                                   PML_08MDN.115 = dataframes_extraidos[[1]]$pml,
+                                   PML_01NEC.85 = dataframes_extraidos[[2]]$pml,
+                                   PML_01ITD.115 = dataframes_extraidos[[3]]$pml,
+                                   PML_01PCC.85 = dataframes_extraidos[[4]]$pml,
+                                   PML_06PTA.138 = dataframes_extraidos[[5]]$pml ) )
+
+tail(Datos_PML)
+```
+
+```{r medias, echo=FALSE, warning = FALSE}
+df_Means <- data.frame( PML_08MDN.115 = mean(as.numeric(Datos_PML$PML_08MDN.115)),
+                        PML_01NEC.85 = mean(as.numeric(Datos_PML$PML_01NEC.85)),
+                        PML_01ITD.115 = mean(as.numeric(Datos_PML$PML_01ITD.115)),
+                        PML_01PCC.85 = mean(as.numeric(Datos_PML$PML_01PCC.85)),
+                        PML_06PTA.138 = mean(as.numeric(Datos_PML$PML_06PTA.138)) )
+
+datatable( df_Means, rownames = F, options = list(ordering = T), 
+               filter = list( position = 'top', clear = T )) %>% 
+      formatCurrency( c(1:5), currency = "$", interval = 3, mark = ",", digits = 2)
+```
+
+## Ejemplo de Gráfica Interactiva
+
+```{r graph, echo=FALSE, warning = FALSE, fig.width = 10, fig.height = 8, fig.align='center'}
+
+# Creamos variable de fecha
+Datos_PML$Periodo <- as.POSIXct( paste( Datos_PML$Fecha, Datos_PML$Hora, sep = " "), 
+                                 format = "%Y-%m-%d %H" )
+
+fig <- plot_ly( x = Datos_PML$Periodo, y = as.numeric( Datos_PML$PML_08MDN.115), name = '08MDN-115',
+                type = 'scatter', mode = 'lines', text = Datos_PML$Periodo, 
+                line = list(color = 'darkblue'),
+                hovertemplate = paste( '<b>Precio</b>: $%{y:.2f} en el momento: ',
+                                       '<b>%{text}</b>') )
+
+fig <- fig %>% add_trace( y = as.numeric( Datos_PML$PML_01NEC.85 ), name = '01NEC-85', 
+                          type = 'scatter',  mode = 'lines', text = Datos_PML$Periodo, 
+                          line = list(color = 'darkred'),
+                          hovertemplate = paste( '<b>Precio</b>: $%{y:.2f} en el momento: ',
+                                                 '<b>%{text}</b>') )
+
+fig <- fig %>% add_trace( y = as.numeric( Datos_PML$PML_01ITD.115 ), name = '01ITD-115', 
+                          type = 'scatter',  mode = 'lines', text = Datos_PML$Periodo, 
+                          line = list(color = 'darkgreen'),
+                          hovertemplate = paste( '<b>Precio</b>: $%{y:.2f} en el momento: ',
+                                                 '<b>%{text}</b>') )
+
+fig <- fig %>% add_trace( y = as.numeric( Datos_PML$PML_01PCC.85 ), name = '01PCC-85', 
+                          type = 'scatter',  mode = 'lines', text = Datos_PML$Periodo, 
+                          line = list(color = 'gold'),
+                          hovertemplate = paste( '<b>Precio</b>: $%{y:.2f} en el momento: ',
+                                                 '<b>%{text}</b>') )
+
+fig <- fig %>% add_trace( y = as.numeric( Datos_PML$PML_06PTA.138 ), name = '06PTA.138', 
+                          type = 'scatter',  mode = 'lines', text = Datos_PML$Periodo, 
+                          line = list(color = 'orange'),
+                          hovertemplate = paste( '<b>Precio</b>: $%{y:.2f} en el momento: ',
+                                                 '<b>%{text}</b>') )
+    
+fig <- fig %>% layout(legend = list(x = 1.0, y = 0.5, orientation = 'v'))
+    
+fig <- fig %>% layout( xaxis = list(title = "Time", tickangle = 0), 
+                       yaxis = list(title = "MXN", tickformat = "$,"), 
+                       font = list( family = "calibri", size = 14, color = 'black'))
+
+fig
+```
+
+FIN
