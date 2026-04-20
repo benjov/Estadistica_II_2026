@@ -1,0 +1,843 @@
+---
+title: "Sesión de Práctica: Pruebas de Hipótesis"
+subtitle: "Estadística II"
+author: "Benjamín Oliva"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_depth: 3
+    toc_float: true
+    number_sections: true
+    theme: flatly
+    highlight: tango
+    code_folding: show
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo = TRUE,
+  message = FALSE,
+  warning = FALSE,
+  fig.align = "center",
+  fig.width = 8,
+  fig.height = 5
+)
+set.seed(42)
+```
+
+---
+
+# Introducción y objetivos (5 min)
+
+Esta sesión de práctica cubre el **Capítulo 9: Pruebas de Hipótesis** de las notas de clase. Al finalizar serás capaz de:
+
+- Formular correctamente hipótesis nula ($H_0$) y alternativa ($H_a$).
+- Distinguir entre pruebas de 1 cola y 2 colas.
+- Identificar errores Tipo I ($\alpha$) y Tipo II ($\beta$), y calcular la potencia.
+- Implementar en R pruebas para **medias**, **diferencias de medias**, **varianzas** y **proporciones**.
+- Interpretar el **p-value** y tomar decisiones estadísticas.
+
+**Distribución del tiempo:**
+
+| Bloque | Tema | Duración |
+|--------|------|----------|
+| 1 | Conceptos fundamentales y errores | 25 min |
+| 2 | Pruebas para medias (Z y T) | 25 min |
+| 3 | Pruebas para diferencias de medias | 20 min |
+| 4 | Pruebas para varianzas (Chi-cuadrada y F) | 20 min |
+| 5 | Pruebas para proporciones | 15 min |
+| 6 | Ejercicios integradores | 10 min |
+
+---
+
+# Bloque 1: Conceptos fundamentales (25 min)
+
+## Elementos de una prueba estadística
+
+Una prueba de hipótesis es una conjetura sobre alguna característica de una distribución de probabilidad. Se descompone en:
+
+- **Hipótesis nula** ($H_0$): la afirmación que buscamos aceptar o rechazar.
+- **Hipótesis alternativa** ($H_a$): válida si rechazamos $H_0$.
+
+La **región de rechazo** $R$ está definida por:
+$$R = \{x : T(x) > c\}$$
+donde $T$ es la estadística de prueba y $c$ el valor crítico.
+
+### Tipos de prueba
+
+```{r tipos-prueba}
+# Visualicemos las zonas de rechazo para los 3 tipos de prueba
+
+par(mfrow = c(1, 3), mar = c(4, 4, 3, 1))
+x <- seq(-4, 4, length.out = 500)
+y <- dnorm(x)
+
+# --- Prueba de 2 colas ---
+plot(x, y, type = "l", lwd = 2, main = "2 colas: H₀: μ = μ₀ vs Hₐ: μ ≠ μ₀",
+     xlab = "Z", ylab = "f(z)", col = "steelblue")
+z_crit <- qnorm(0.975)
+polygon(c(x[x >= z_crit], z_crit), c(y[x >= z_crit], 0),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+polygon(c(-z_crit, x[x <= -z_crit]), c(0, y[x <= -z_crit]),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+abline(v = c(-z_crit, z_crit), lty = 2, col = "red")
+text(2.5, 0.15, paste0("zα/2 = ", round(z_crit, 3)), col = "red", cex = 0.8)
+
+# --- Prueba de cola derecha ---
+plot(x, y, type = "l", lwd = 2, main = "Cola derecha: H₀: μ = μ₀ vs Hₐ: μ > μ₀",
+     xlab = "Z", ylab = "f(z)", col = "steelblue")
+z_a <- qnorm(0.95)
+polygon(c(x[x >= z_a], z_a), c(y[x >= z_a], 0),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+abline(v = z_a, lty = 2, col = "red")
+text(2.2, 0.15, paste0("zα = ", round(z_a, 3)), col = "red", cex = 0.8)
+
+# --- Prueba de cola izquierda ---
+plot(x, y, type = "l", lwd = 2, main = "Cola izquierda: H₀: μ = μ₀ vs Hₐ: μ < μ₀",
+     xlab = "Z", ylab = "f(z)", col = "steelblue")
+polygon(c(-z_a, x[x <= -z_a]), c(0, y[x <= -z_a]),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+abline(v = -z_a, lty = 2, col = "red")
+text(-2.2, 0.15, paste0("-zα = ", round(-z_a, 3)), col = "red", cex = 0.8)
+```
+
+## Errores Tipo I, Tipo II y potencia
+
+| | $H_0$ cierta | $H_1$ cierta |
+|---|---|---|
+| **No rechazo $H_0$** | Decisión correcta | Error Tipo II ($\beta$) |
+| **Rechazo $H_0$** | Error Tipo I ($\alpha$) | Decisión correcta |
+
+- **Nivel de significancia**: $\alpha = P(\text{rechazar } H_0 \mid H_0 \text{ cierta})$
+- **Potencia de la prueba**: $1 - \beta = P(\text{rechazar } H_0 \mid H_0 \text{ falsa})$
+
+### Visualización de errores Tipo I y Tipo II
+
+```{r errores-tipo}
+par(mfrow = c(1, 1))
+
+mu_0 <- 0      # Media bajo H0
+mu_1 <- 1.5      # Media bajo H1 (verdadera)
+sigma <- 1
+n <- 25
+se <- sigma / sqrt(n)
+
+x_vals <- seq(mu_0 - 4*se, mu_1 + 4*se, length.out = 500)
+y_h0 <- dnorm(x_vals, mean = mu_0, sd = se)
+y_h1 <- dnorm(x_vals, mean = mu_1, sd = se)
+
+# Valor crítico para alpha = 0.05, cola derecha
+k <- mu_0 + qnorm(0.95) * se
+
+plot(x_vals, y_h0, type = "l", lwd = 2, col = "steelblue",
+     main = "Errores Tipo I y Tipo II",
+     xlab = expression(bar(X)), ylab = "Densidad", ylim = c(0, max(y_h0, y_h1) * 1.1))
+lines(x_vals, y_h1, lwd = 2, col = "darkgreen")
+
+# Sombrear alpha (Error Tipo I)
+idx_alpha <- x_vals >= k
+polygon(c(k, x_vals[idx_alpha]), c(0, y_h0[idx_alpha]),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+
+# Sombrear beta (Error Tipo II)
+idx_beta <- x_vals <= k
+polygon(c(x_vals[idx_beta], k), c(y_h1[idx_beta], 0),
+        col = rgb(0, 0, 1, 0.2), border = NA)
+
+abline(v = k, lty = 2, col = "red", lwd = 1.5)
+legend("topright",
+       legend = c(
+         expression(paste("Distribución bajo ", H[0])),
+         expression(paste("Distribución bajo ", H[1])),
+         expression(paste("Error Tipo I (", alpha, ")")),
+         expression(paste("Error Tipo II (", beta, ")"))
+       ),
+       col = c("steelblue", "darkgreen", rgb(1,0,0,0.5), rgb(0,0,1,0.4)),
+       lwd = c(2, 2, 8, 8), cex = 0.8)
+text(k, max(y_h0)*1.05, paste0("K = ", round(k, 3)), col = "red", cex = 0.9)
+```
+
+### Ejercicio 1.1: Calcula $\alpha$ y $\beta$
+
+Dado $\mu_0 = 0$, $\mu_1 = 1.5$, $\sigma = 1$, $n = 16$ y un valor crítico determinado al 5%:
+
+```{r ejercicio-1-1}
+mu_0 <- 0
+mu_1 <- 1.5
+sigma <- 1
+n <- 16
+se <- sigma / sqrt(n)
+alpha <- 0.05
+
+# Valor crítico (cola derecha)
+K <- mu_0 + qnorm(1 - alpha) * se
+cat("Valor crítico K =", round(K, 4), "\n")
+
+# Error Tipo I
+alpha_calc <- pnorm(K, mean = mu_0, sd = se, lower.tail = FALSE)
+cat("Error Tipo I (α) =", round(alpha_calc, 4), "\n")
+
+# Error Tipo II
+beta <- pnorm(K, mean = mu_1, sd = se, lower.tail = TRUE)
+cat("Error Tipo II (β) =", round(beta, 4), "\n")
+
+# Potencia
+potencia <- 1 - beta
+cat("Potencia (1 - β) =", round(potencia, 4), "\n")
+```
+
+> **Pregunta para TAREA:** ¿Qué ocurre con $\beta$ si aumentamos el tamaño de muestra $n$? Modifica `n` en el código anterior y observa el cambio.
+
+---
+
+# Bloque 2: Pruebas para medias (25 min)
+
+## Prueba Z (varianza conocida)
+
+Cuando conocemos $\sigma^2$, la estadística de prueba es:
+$$Z = \frac{\bar{X} - \mu_0}{\sigma / \sqrt{n}}$$
+
+### Ejemplo de las notas: Calificaciones (σ conocida)
+
+> Una muestra de $n = 25$ alumnos con $\bar{X} = 8.091$ y $\sigma = 0.16$. Probar $H_0: \mu = 8$ vs $H_a: \mu \neq 8$ al 99% de confianza.
+
+```{r prueba-z-ejemplo}
+# Datos
+x_bar <- 8.091
+mu_0  <- 8
+sigma <- 0.16
+n     <- 25
+alpha <- 0.01
+
+# Estadística de prueba
+Z <- (x_bar - mu_0) / (sigma / sqrt(n))
+cat("Estadística Z =", round(Z, 4), "\n")
+
+# Valor crítico (2 colas)
+z_crit <- qnorm(1 - alpha/2)
+cat("Valor crítico z_α/2 =", round(z_crit, 4), "\n")
+
+# Decisión
+cat("¿|Z| >= z_α/2?:", abs(Z) >= z_crit, "\n")
+cat("Decisión:", ifelse(abs(Z) >= z_crit,
+    "RECHAZAMOS H₀ — la media NO es 8",
+    "NO rechazamos H₀"), "\n")
+
+# p-value
+p_value <- 2 * pnorm(abs(Z), lower.tail = FALSE)
+cat("p-value =", format(p_value, scientific = TRUE), "\n")
+```
+
+### Visualización de la prueba Z
+
+```{r visualizacion-z}
+x_seq <- seq(-4, 4, length.out = 500)
+y_seq <- dnorm(x_seq)
+
+plot(x_seq, y_seq, type = "l", lwd = 2, col = "steelblue",
+     main = "Prueba Z bilateral al 99%",
+     xlab = "Z", ylab = "f(z)")
+
+# Zonas de rechazo
+polygon(c(x_seq[x_seq >= z_crit], z_crit), c(y_seq[x_seq >= z_crit], 0),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+polygon(c(-z_crit, x_seq[x_seq <= -z_crit]), c(0, y_seq[x_seq <= -z_crit]),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+
+abline(v = c(-z_crit, z_crit), lty = 2, col = "red")
+abline(v = Z, lty = 1, col = "darkgreen", lwd = 2)
+
+legend("topright",
+       legend = c(paste0("z_α/2 = ±", round(z_crit, 3)),
+                  paste0("Z_obs = ", round(Z, 3)),
+                  "Zona de rechazo"),
+       col = c("red", "darkgreen", rgb(1,0,0,0.5)),
+       lwd = c(1, 2, 8), lty = c(2, 1, 1), cex = 0.8)
+```
+
+## Prueba T (varianza desconocida)
+
+Cuando **no** conocemos $\sigma^2$, usamos $\hat{\sigma}$ y la distribución $t$:
+$$T = \frac{\bar{X} - \mu_0}{\hat{\sigma} / \sqrt{n}} \sim t_{[n-1]}$$
+
+### Ejemplo de las notas: Muestra pequeña con $\sigma$ desconocida
+
+> Muestra de $n = 5$ de una normal con $\bar{X} = 183.1$, $\hat{\sigma} = 8.2$, $\alpha = 0.05$. Probar $H_0: \mu = 185$ vs $H_a: \mu < 185$.
+
+```{r prueba-t-ejemplo}
+x_bar  <- 183.1
+mu_0   <- 185
+s_hat  <- 8.2
+n      <- 5
+alpha  <- 0.05
+
+# Estadística T
+T_stat <- (x_bar - mu_0) / (s_hat / sqrt(n))
+cat("Estadística T =", round(T_stat, 4), "\n")
+
+# Valor crítico (cola izquierda)
+t_crit <- qt(alpha, df = n - 1)
+cat("Valor crítico -t_α =", round(t_crit, 4), "\n")
+
+# Decisión
+cat("¿T <= -t_α?:", T_stat <= t_crit, "\n")
+cat("Decisión:", ifelse(T_stat <= t_crit,
+    "RECHAZAMOS H₀",
+    "NO rechazamos H₀ — no hay evidencia de que μ < 185"), "\n")
+
+# p-value
+p_value <- pt(T_stat, df = n - 1)
+cat("p-value =", round(p_value, 4), "\n")
+```
+
+### Ejercicio 2.1: Temperaturas máximas en la CDMX
+
+La Conagua reporta que históricamente la temperatura máxima promedio en abril en la CDMX es de 26°C con una desviación estándar poblacional conocida de $\sigma = 2.3°C$. Un grupo de estudiantes registró las temperaturas máximas (°C) durante 30 días de abril:
+
+```{r ejercicio-2-1}
+# Datos de temperaturas máximas (°C) en abril, CDMX
+temperaturas <- c(27.1, 28.3, 26.5, 29.0, 25.8, 27.4, 28.9, 26.2, 27.7, 30.1,
+                  26.8, 28.5, 27.3, 29.2, 26.0, 28.1, 27.6, 29.5, 25.4, 28.8,
+                  27.0, 28.6, 26.9, 29.3, 27.8, 28.0, 26.7, 29.1, 27.5, 28.4)
+
+# Exploremos los datos
+cat("Resumen de temperaturas:\n")
+summary(temperaturas)
+cat("\nDesviación estándar muestral:", round(sd(temperaturas), 4), "\n")
+hist(temperaturas, breaks = 8, col = "lightyellow", border = "steelblue",
+     main = "Temperaturas máximas en abril (CDMX)",
+     xlab = "Temperatura (°C)", ylab = "Frecuencia")
+abline(v = 26, col = "red", lty = 2, lwd = 2)
+legend("topright", "μ₀ = 26°C", col = "red", lty = 2, lwd = 2)
+
+# Prueba Z: ¿Ha aumentado la temperatura promedio?
+# H0: mu = 26  vs  Ha: mu != 26, con sigma conocida = 2.3
+sigma_conocida <- 2.3
+x_bar <- mean(temperaturas)
+n <- length(temperaturas)
+mu_0 <- 26
+alpha <- 0.05
+
+Z <- (x_bar - mu_0) / (sigma_conocida / sqrt(n))
+z_crit <- qnorm(1 - alpha/2)
+p_val <- 2 * pnorm(abs(Z), lower.tail = FALSE)
+
+cat("\nMedia muestral:", round(x_bar, 4), "°C\n")
+cat("Z =", round(Z, 4), "\n")
+cat("Valor crítico z_α/2 =", round(z_crit, 4), "\n")
+cat("p-value =", round(p_val, 4), "\n")
+cat("Decisión:", ifelse(abs(Z) >= z_crit, "Rechazamos H₀", "No rechazamos H₀"), "\n")
+```
+
+### Ejercicio 2.2: Nivel de hemoglobina — Prueba T con `t.test()`
+
+Un laboratorio clínico afirma que el nivel promedio de hemoglobina en hombres adultos sanos es de 15.5 g/dL. Se toman muestras de sangre de 12 pacientes:
+
+```{r ejercicio-2-2}
+# Niveles de hemoglobina (g/dL) de 12 pacientes
+hemoglobina <- c(14.2, 15.1, 13.8, 14.9, 15.7, 14.5, 13.6, 15.3, 14.0, 14.8, 15.0, 14.3)
+
+# Exploración de los datos
+cat("n =", length(hemoglobina), "\n")
+cat("Media muestral:", round(mean(hemoglobina), 4), "g/dL\n")
+cat("Desv. estándar muestral:", round(sd(hemoglobina), 4), "g/dL\n")
+
+boxplot(hemoglobina, horizontal = TRUE, col = "lightcyan",
+        main = "Niveles de hemoglobina", xlab = "g/dL")
+abline(v = 15.5, col = "red", lty = 2, lwd = 2)
+
+# H0: mu = 15.5  vs  Ha: mu != 15.5 (varianza desconocida -> prueba T)
+resultado <- t.test(hemoglobina, mu = 15.5, alternative = "two.sided", conf.level = 0.95)
+print(resultado)
+
+# Extraer componentes
+cat("\nEstadística t =", round(resultado$statistic, 4), "\n")
+cat("p-value =", round(resultado$p.value, 4), "\n")
+cat("Intervalo de confianza:", round(resultado$conf.int, 4), "\n")
+cat("Decisión:", ifelse(resultado$p.value < 0.05,
+    "Rechazamos H₀ — el promedio difiere de 15.5",
+    "No rechazamos H₀"), "\n")
+```
+
+> **Ejercicio para TAREA:** Cambia `alternative = "less"` para probar si el nivel es *menor* a 15.5 g/dL. ¿Cambia la decisión?
+
+---
+
+# Bloque 3: Pruebas para diferencias de medias (20 min)
+
+## Varianzas conocidas (prueba Z)
+
+$$Z = \frac{(\bar{X}_1 - \bar{X}_2) - \delta}{\sqrt{\frac{\sigma_1^2}{n_1} + \frac{\sigma_2^2}{n_2}}}$$
+
+### Ejemplo de las notas: Diferencia de medias con σ conocida
+
+> Dos muestras con datos del Cuadro 9.2: $\bar{X}_1 = 2.61$, $\bar{X}_2 = 2.38$, $n_1 = 50$, $n_2 = 40$, $\sigma_1 = 0.12$, $\sigma_2 = 0.14$. Probar $H_0: \mu_1 - \mu_2 = 0.20$ al 95%.
+
+```{r dif-medias-z}
+x1_bar <- 2.61; x2_bar <- 2.38
+n1 <- 50; n2 <- 40
+sigma1 <- 0.12; sigma2 <- 0.14
+delta <- 0.20
+alpha <- 0.05
+
+# Estadística Z
+Z <- ((x1_bar - x2_bar) - delta) / sqrt(sigma1^2/n1 + sigma2^2/n2)
+z_crit <- qnorm(1 - alpha/2)
+
+cat("Z =", round(Z, 4), "\n")
+cat("z_α/2 =", round(z_crit, 4), "\n")
+cat("Decisión:", ifelse(abs(Z) >= z_crit,
+    "RECHAZAMOS H₀",
+    "NO rechazamos H₀ — la diferencia es 0.20"), "\n")
+
+p_val <- 2 * pnorm(abs(Z), lower.tail = FALSE)
+cat("p-value =", round(p_val, 4), "\n")
+```
+
+## Varianzas desconocidas (prueba T)
+
+$$T = \frac{(\bar{X}_1 - \bar{X}_2) - \delta}{\hat{\sigma}_p \sqrt{\frac{1}{n_1} + \frac{1}{n_2}}} \sim t_{[n_1 + n_2 - 2]}$$
+
+donde $\hat{\sigma}_p = \sqrt{\frac{(n_1 - 1)\hat{\sigma}_1^2 + (n_2 - 1)\hat{\sigma}_2^2}{n_1 + n_2 - 2}}$
+
+### Ejemplo: Diferencia de medias con σ desconocida
+
+> Dos muestras del Cuadro 9.3: $\bar{X}_1 = 546$, $\bar{X}_2 = 492$, $n_1 = n_2 = 4$, $\hat{\sigma}_1 = 31$, $\hat{\sigma}_2 = 26$. Probar $H_0: \mu_1 - \mu_2 = 0$ vs $H_a: \mu_1 - \mu_2 > 0$ al 95%.
+
+```{r dif-medias-t}
+x1_bar <- 546; x2_bar <- 492
+n1 <- 4; n2 <- 4
+s1 <- 31; s2 <- 26
+delta <- 0
+alpha <- 0.05
+
+# Varianza combinada
+sp <- sqrt(((n1 - 1)*s1^2 + (n2 - 1)*s2^2) / (n1 + n2 - 2))
+cat("σ̂_p =", round(sp, 3), "\n")
+
+# Estadística T
+T_stat <- ((x1_bar - x2_bar) - delta) / (sp * sqrt(1/n1 + 1/n2))
+df <- n1 + n2 - 2
+t_crit <- qt(1 - alpha/2, df = df)
+
+cat("T =", round(T_stat, 4), "\n")
+cat("t_α/2,(n1+n2-2) =", round(t_crit, 4), "\n")
+cat("Decisión:", ifelse(T_stat >= t_crit,
+    "RECHAZAMOS H₀ — μ₁ > μ₂",
+    "NO rechazamos H₀"), "\n")
+
+p_val <- pt(T_stat, df = df, lower.tail = FALSE)
+cat("p-value (cola derecha) =", round(p_val, 4), "\n")
+```
+
+### Ejercicio 3.1: Salarios iniciales de egresados — CDMX vs Guadalajara
+
+Una universidad quiere comparar el salario mensual inicial (en miles de pesos) de sus egresados en dos ciudades. Se encuestó a egresados recientes:
+
+```{r ejercicio-3-1}
+# Salarios mensuales iniciales (miles de pesos)
+salarios_cdmx <- c(18.5, 22.0, 19.8, 25.3, 21.0, 17.6, 23.4, 20.1, 19.5, 24.2,
+                   21.8, 18.9, 22.7, 20.5, 23.1, 19.0, 21.5, 24.8, 17.2, 22.3,
+                   20.8, 23.6, 18.1, 21.2, 19.7, 22.9, 20.3, 24.0, 21.6, 19.3)
+
+salarios_gdl  <- c(16.2, 19.5, 17.8, 20.1, 18.3, 15.9, 21.0, 17.2, 18.7, 19.8,
+                   16.5, 20.5, 17.0, 19.2, 18.0, 16.8, 20.3, 17.5, 19.0, 18.5,
+                   15.5, 21.2, 17.9, 18.8, 16.0, 19.6, 17.3, 20.8, 18.1, 16.7,
+                   19.3, 17.6, 18.4, 20.0, 16.3)
+
+# Exploración visual
+par(mfrow = c(1, 2))
+hist(salarios_cdmx, breaks = 8, col = rgb(0.2, 0.4, 0.8, 0.4), border = "steelblue",
+     main = "CDMX", xlab = "Salario (miles $)", xlim = c(14, 26))
+hist(salarios_gdl, breaks = 8, col = rgb(0.8, 0.3, 0.2, 0.4), border = "firebrick",
+     main = "Guadalajara", xlab = "Salario (miles $)", xlim = c(14, 26))
+par(mfrow = c(1, 1))
+
+cat("CDMX:  n =", length(salarios_cdmx), " media =", round(mean(salarios_cdmx), 2),
+    " sd =", round(sd(salarios_cdmx), 2), "\n")
+cat("GDL:   n =", length(salarios_gdl), " media =", round(mean(salarios_gdl), 2),
+    " sd =", round(sd(salarios_gdl), 2), "\n")
+
+# Primero: ¿podemos asumir varianzas iguales?
+var.test(salarios_cdmx, salarios_gdl)
+
+# Prueba t para dos muestras independientes
+resultado <- t.test(salarios_cdmx, salarios_gdl,
+                    alternative = "two.sided",
+                    var.equal = TRUE,
+                    conf.level = 0.95)
+print(resultado)
+
+cat("\nDiferencia estimada:", round(mean(salarios_cdmx) - mean(salarios_gdl), 2), "mil pesos\n")
+```
+
+> **Pregunta para TAREA:** ¿Qué sucede si cambias `var.equal = FALSE`? Esa es la corrección de **Welch** para varianzas desiguales. ¿Cambia tu conclusión?
+
+---
+
+# Bloque 4: Pruebas para varianzas (20 min)
+
+## Prueba Chi-cuadrada para una varianza
+
+$$\chi^2 = \frac{(n-1)\hat{\sigma}^2}{\sigma_0^2} \sim \chi^2_{[n-1]}$$
+
+### Ejemplo de las notas: Varianza muestral vs poblacional
+
+> Muestra de $n = 18$ de una normal con $\hat{\sigma} = 0.68$. Probar $H_0: \sigma^2 = 0.36$ vs $H_a: \sigma^2 > 0.36$ al 95%.
+
+```{r prueba-chi2}
+n <- 18
+s_hat_sq <- 0.68  # Nota: en las notas se usa sigma_hat = 0.68 como varianza
+sigma_0_sq <- 0.36
+alpha <- 0.05
+
+# Estadística Chi-cuadrada
+chi2 <- (n - 1) * s_hat_sq / sigma_0_sq
+chi2_crit <- qchisq(1 - alpha, df = n - 1)
+
+cat("χ² =", round(chi2, 4), "\n")
+cat("χ²_α,(n-1) =", round(chi2_crit, 4), "\n")
+cat("Decisión:", ifelse(chi2 >= chi2_crit,
+    "RECHAZAMOS H₀ — la varianza es mayor que 0.36",
+    "NO rechazamos H₀"), "\n")
+
+p_val <- pchisq(chi2, df = n - 1, lower.tail = FALSE)
+cat("p-value =", round(p_val, 4), "\n")
+```
+
+### Visualización de la prueba Chi-cuadrada
+
+```{r viz-chi2}
+x_seq <- seq(0, 50, length.out = 500)
+y_seq <- dchisq(x_seq, df = n - 1)
+
+plot(x_seq, y_seq, type = "l", lwd = 2, col = "steelblue",
+     main = expression(paste("Prueba ", chi^2, " (cola derecha, gl = 17)")),
+     xlab = expression(chi^2), ylab = "Densidad")
+
+# Zona de rechazo
+polygon(c(chi2_crit, x_seq[x_seq >= chi2_crit]),
+        c(0, y_seq[x_seq >= chi2_crit]),
+        col = rgb(1, 0, 0, 0.3), border = NA)
+
+abline(v = chi2_crit, lty = 2, col = "red")
+abline(v = chi2, lty = 1, col = "darkgreen", lwd = 2)
+
+legend("topright",
+       legend = c(paste0("χ²_crit = ", round(chi2_crit, 2)),
+                  paste0("χ²_obs = ", round(chi2, 2))),
+       col = c("red", "darkgreen"), lwd = c(1, 2), lty = c(2, 1))
+```
+
+## Prueba F para razón de dos varianzas
+
+$$F = \frac{\hat{\sigma}_1^2}{\hat{\sigma}_2^2} \sim F_{[n_1-1, n_2-1]}$$
+
+### Ejemplo de las notas: Comparación de varianzas
+
+> Dos muestras del Cuadro 9.4: $\hat{\sigma}_1^2 = 19.2$, $\hat{\sigma}_2^2 = 3.5$, $n_1 = 13$, $n_2 = 16$. Probar $H_0: \sigma_1^2 = \sigma_2^2$ al 98%.
+
+```{r prueba-f}
+s1_sq <- 19.2; s2_sq <- 3.5
+n1 <- 13; n2 <- 16
+alpha <- 0.02
+
+# Estadística F (mayor varianza en numerador)
+F_stat <- s1_sq / s2_sq
+df1 <- n1 - 1; df2 <- n2 - 1
+
+f_crit <- qf(1 - alpha/2, df1 = df1, df2 = df2)
+
+cat("F =", round(F_stat, 4), "\n")
+cat("f_α/2,(n1-1,n2-1) =", round(f_crit, 4), "\n")
+cat("Decisión:", ifelse(F_stat >= f_crit,
+    "RECHAZAMOS H₀ — las varianzas NO son iguales",
+    "NO rechazamos H₀"), "\n")
+
+p_val <- 2 * pf(F_stat, df1 = df1, df2 = df2, lower.tail = FALSE)
+cat("p-value =", round(p_val, 4), "\n")
+```
+
+### Ejercicio 4.1: Control de calidad — Dos líneas de producción
+
+Una fábrica de tornillos tiene dos líneas de producción. El gerente de calidad quiere saber si la variabilidad en el diámetro (mm) es la misma en ambas líneas:
+
+```{r ejercicio-4-1}
+# Diámetros de tornillos (mm) — dos líneas de producción
+linea_A <- c(10.02, 9.98, 10.05, 9.97, 10.01, 10.03, 9.96, 10.04, 9.99, 10.00,
+             10.06, 9.95, 10.02, 9.98, 10.01, 10.03, 9.97, 10.05, 9.99, 10.00)
+
+linea_B <- c(10.15, 9.82, 10.21, 9.78, 10.10, 9.88, 10.25, 9.75, 10.08, 9.92,
+             10.18, 9.80, 10.12, 9.85, 10.22, 9.76, 10.05, 9.90, 10.20, 9.83,
+             10.14, 9.86, 10.09, 9.91, 10.17)
+
+# Exploración visual
+boxplot(list("Línea A" = linea_A, "Línea B" = linea_B),
+        col = c("lightblue", "lightsalmon"),
+        main = "Diámetros de tornillos por línea de producción",
+        ylab = "Diámetro (mm)")
+
+cat("Línea A: var =", round(var(linea_A), 6), " sd =", round(sd(linea_A), 4), "\n")
+cat("Línea B: var =", round(var(linea_B), 6), " sd =", round(sd(linea_B), 4), "\n")
+cat("Razón de varianzas (B/A):", round(var(linea_B)/var(linea_A), 2), "\n\n")
+
+# Prueba F con var.test()
+resultado_f <- var.test(linea_A, linea_B, conf.level = 0.95)
+print(resultado_f)
+
+cat("\nRazón de varianzas estimada:", round(resultado_f$estimate, 4), "\n")
+cat("¿Rechazamos igualdad de varianzas?",
+    ifelse(resultado_f$p.value < 0.05, "Sí — la Línea B es más variable", "No"), "\n")
+```
+
+---
+
+# Bloque 5: Pruebas para proporciones (15 min)
+
+## Prueba Z para una proporción
+
+$$Z = \frac{X - n\theta_0}{\sqrt{n\theta_0(1 - \theta_0)}}$$
+
+### Ejemplo de las notas: Proporción de un padecimiento
+
+> De $n = 200$ individuos, $X = 22$ tienen un padecimiento. Probar $H_0: \theta = 0.20$ vs $H_a: \theta < 0.20$.
+
+```{r prueba-prop}
+X <- 22
+n <- 200
+theta_0 <- 0.20
+alpha <- 0.01
+
+# Estadística Z
+Z <- (X - n * theta_0) / sqrt(n * theta_0 * (1 - theta_0))
+
+cat("Z =", round(Z, 4), "\n")
+cat("-z_α = ", round(qnorm(alpha), 4), "\n")
+cat("Decisión:", ifelse(Z <= qnorm(alpha),
+    "RECHAZAMOS H₀ — la proporción ha disminuido",
+    "NO rechazamos H₀"), "\n")
+
+p_val <- pnorm(Z)
+cat("p-value =", round(p_val, 4), "\n")
+```
+
+### Usando `prop.test()` en R
+
+```{r prop-test-r}
+# La misma prueba usando prop.test()
+resultado_prop <- prop.test(x = 22, n = 200, p = 0.20,
+                            alternative = "less",
+                            conf.level = 0.99,
+                            correct = FALSE)  # sin corrección de continuidad
+print(resultado_prop)
+```
+
+### Ejercicio 5.1: Encuesta — Preferencia por transporte público
+
+En una encuesta sobre movilidad urbana, se preguntó a habitantes de dos delegaciones de la CDMX si prefieren usar el transporte público. Los resultados individuales (1 = sí, 0 = no) son:
+
+```{r ejercicio-5-1}
+# Respuestas individuales: 1 = prefiere transporte público, 0 = no
+set.seed(2025)
+delegacion_1 <- c(rep(1, 132), rep(0, 68))   # 200 encuestados
+delegacion_2 <- c(rep(1, 90),  rep(0, 60))    # 150 encuestados
+
+# Mezclar para que se sientan como datos "reales"
+delegacion_1 <- sample(delegacion_1)
+delegacion_2 <- sample(delegacion_2)
+
+# Los alumnos calculan las proporciones desde los datos crudos
+n1 <- length(delegacion_1)
+n2 <- length(delegacion_2)
+x1 <- sum(delegacion_1)
+x2 <- sum(delegacion_2)
+p1_hat <- x1 / n1
+p2_hat <- x2 / n2
+
+cat("Delegación 1: n =", n1, " éxitos =", x1, " p̂₁ =", p1_hat, "\n")
+cat("Delegación 2: n =", n2, " éxitos =", x2, " p̂₂ =", p2_hat, "\n")
+cat("Diferencia:", round(p1_hat - p2_hat, 4), "\n\n")
+
+# Visualización
+barplot(c(p1_hat, p2_hat), names.arg = c("Delegación 1", "Delegación 2"),
+        col = c("steelblue", "coral"), ylim = c(0, 1),
+        main = "Proporción que prefiere transporte público",
+        ylab = "Proporción")
+abline(h = 0.5, lty = 2, col = "gray40")
+
+# Prueba de diferencia de proporciones al 95%
+resultado <- prop.test(x = c(x1, x2), n = c(n1, n2),
+                       alternative = "two.sided",
+                       conf.level = 0.95,
+                       correct = FALSE)
+print(resultado)
+
+cat("\n¿Hay diferencia significativa?",
+    ifelse(resultado$p.value < 0.05, "Sí", "No"), "\n")
+```
+
+---
+
+# Bloque 6: Ejercicios integradores (10 min)
+
+## Ejercicio para TAREA: Caso completo — Calidad de un producto
+
+Una fábrica de cereales afirma que sus cajas contienen en promedio 500g. La desviación estándar del proceso es conocida: $\sigma = 12g$. Un inspector de calidad pesa 40 cajas seleccionadas al azar. ¿Hay evidencia al 5% de que el peso promedio difiere de 500g?
+
+```{r ejercicio-6-1}
+# Pesos de 40 cajas de cereal (gramos)
+pesos <- c(498.2, 495.1, 501.3, 493.8, 499.5, 496.7, 502.1, 494.3, 497.8, 500.6,
+           491.2, 498.9, 495.5, 503.2, 497.0, 494.8, 499.1, 496.3, 501.8, 493.5,
+           498.5, 495.9, 500.2, 494.1, 497.3, 502.5, 496.0, 499.7, 493.2, 498.0,
+           495.3, 501.5, 494.6, 497.9, 500.8, 496.5, 499.3, 493.9, 498.7, 495.7)
+
+# Exploración
+cat("n =", length(pesos), "\n")
+cat("Media muestral:", round(mean(pesos), 2), "g\n")
+cat("Desv. estándar muestral:", round(sd(pesos), 2), "g\n")
+hist(pesos, breaks = 10, col = "wheat", border = "sienna",
+     main = "Peso de cajas de cereal", xlab = "Peso (g)")
+abline(v = 500, col = "red", lty = 2, lwd = 2)
+abline(v = mean(pesos), col = "blue", lty = 1, lwd = 2)
+legend("topright", c("μ₀ = 500g", paste0("x̄ = ", round(mean(pesos),1), "g")),
+       col = c("red", "blue"), lty = c(2,1), lwd = 2)
+
+# --- Completa aquí la prueba Z ---
+# sigma <- ___
+# Z <- ___
+# z_crit <- ___
+# Decisión: ___
+```
+
+## Ejercicio 6.2: Tres escenarios con datos — Elige la prueba correcta
+
+Para cada situación tienes los **datos crudos**. Identifica qué prueba corresponde y complétala.
+
+```{r ejercicio-6-2}
+# ============================================================
+# Situación A: Variabilidad en tiempos de entrega
+# ============================================================
+# Una empresa de mensajería dice que la varianza de sus tiempos 
+# de entrega (horas) es σ² = 4. ¿Es menor?
+# Tipo de prueba: ___________
+
+tiempos_entrega <- c(23.5, 24.1, 22.8, 23.9, 24.5, 23.2, 24.0, 23.7,
+                     22.5, 23.8, 24.2, 23.1, 23.6, 24.3, 22.9, 23.4,
+                     24.1, 23.0, 23.5, 24.0)
+
+cat("=== Situación A: Prueba de varianza ===\n")
+cat("n =", length(tiempos_entrega), "\n")
+cat("Varianza muestral:", round(var(tiempos_entrega), 4), "\n")
+# Completa: chi2 <- ___  ;  chi2_crit <- ___
+
+
+# ============================================================
+# Situación B: Efecto de un nuevo método de estudio
+# ============================================================
+# Se mide la calificación de dos grupos de alumnos:
+# Grupo 1 usó el método tradicional, Grupo 2 el nuevo método.
+# ¿El nuevo método produce calificaciones más altas?
+# Tipo de prueba: ___________
+
+metodo_tradicional <- c(72, 68, 75, 70, 65, 78, 71, 69, 74, 67,
+                        73, 66, 76, 70, 68)
+metodo_nuevo       <- c(78, 82, 75, 85, 79, 88, 76, 83, 80, 77,
+                        84, 81, 79, 86, 74, 82, 80, 77)
+
+cat("\n=== Situación B: Comparación de medias ===\n")
+cat("Tradicional: n =", length(metodo_tradicional),
+    " media =", round(mean(metodo_tradicional), 2), "\n")
+cat("Nuevo:       n =", length(metodo_nuevo),
+    " media =", round(mean(metodo_nuevo), 2), "\n")
+# Completa: t.test(___) o cálculo manual
+
+
+# ============================================================
+# Situación C: Intención de voto
+# ============================================================
+# Se encuestó a 500 personas y 135 dijeron apoyar al candidato A.
+# El candidato necesita al menos 30% para pasar a segunda vuelta.
+# ¿Hay evidencia de que el apoyo es menor al 30%?
+# Tipo de prueba: ___________
+
+n_encuesta <- 500
+votos_a_favor <- 135
+
+cat("\n=== Situación C: Prueba de proporción ===\n")
+cat("Proporción muestral:", round(votos_a_favor/n_encuesta, 4), "\n")
+# Completa: prop.test(___) o cálculo manual con Z
+```
+
+---
+
+# Resumen: Cuándo usar cada prueba
+
+```{r resumen-tabla, echo=FALSE}
+resumen <- data.frame(
+  Situación = c(
+    "Media, σ conocida",
+    "Media, σ desconocida",
+    "Diferencia de medias, σ's conocidas",
+    "Diferencia de medias, σ's desconocidas",
+    "Una varianza",
+    "Razón de varianzas",
+    "Proporción",
+    "Diferencia de proporciones"
+  ),
+  Estadística = c("Z", "T", "Z", "T", "χ²", "F", "Z", "Z"),
+  `Distribución` = c(
+    "N(0,1)",
+    "t(n-1)",
+    "N(0,1)",
+    "t(n₁+n₂-2)",
+    "χ²(n-1)",
+    "F(n₁-1, n₂-1)",
+    "N(0,1)",
+    "N(0,1)"
+  ),
+  `Función en R` = c(
+    "pnorm / qnorm",
+    "t.test()",
+    "pnorm / qnorm",
+    "t.test(var.equal=TRUE)",
+    "pchisq / qchisq",
+    "var.test()",
+    "prop.test()",
+    "prop.test()"
+  )
+)
+knitr::kable(resumen, caption = "Guía rápida de pruebas de hipótesis")
+```
+
+---
+
+# Apéndice: Funciones útiles en R
+
+```{r apendice, eval=FALSE}
+# --- Distribución Normal ---
+qnorm(0.975)              # Valor crítico z para α/2 = 0.025
+pnorm(1.96)               # Probabilidad acumulada
+2 * pnorm(-abs(Z))        # p-value bilateral
+
+# --- Distribución t-Student ---
+qt(0.975, df = 24)        # Valor crítico t
+pt(2.5, df = 24)           # Probabilidad acumulada
+t.test(x, mu = 100)       # Prueba t para una muestra
+
+# --- Distribución Chi-cuadrada ---
+qchisq(0.95, df = 17)     # Valor crítico χ²
+pchisq(25, df = 17)       # Probabilidad acumulada
+
+# --- Distribución F ---
+qf(0.95, df1 = 12, df2 = 15)  # Valor crítico F
+var.test(x, y)                  # Prueba F para varianzas
+
+# --- Proporciones ---
+prop.test(x = 22, n = 200, p = 0.2)  # Prueba de proporción
+```
+
+---
+La tarea se entrega por correo el 27 de abril de 2026.
+---
