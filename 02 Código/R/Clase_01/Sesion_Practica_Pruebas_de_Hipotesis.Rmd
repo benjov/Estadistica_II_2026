@@ -839,5 +839,5 @@ prop.test(x = 22, n = 200, p = 0.2)  # Prueba de proporción
 ```
 
 ---
-La tarea se entrega por correo el 27 de abril de 2026.
+La tarea se entrega por correo el 30 de abril de 2026.
 ---
