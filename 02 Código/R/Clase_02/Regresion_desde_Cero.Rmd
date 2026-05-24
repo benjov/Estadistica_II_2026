@@ -1,0 +1,496 @@
+---
+title: "Regresión Lineal desde Cero"
+subtitle: "Ejercicio Práctico — Estadística II, CIDE"
+author: "Benjamín Oliva"
+date: "25 de mayo de 2026"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    number_sections: true
+    code_folding: show
+    df_print: paged
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(
+  echo       = TRUE,
+  message    = FALSE,
+  warning    = FALSE,
+  fig.align  = "center",
+  fig.width  = 8,
+  fig.height = 5
+)
+```
+
+# Objetivo
+
+En este ejercicio construiremos **paso a paso** el estimador de Mínimos Cuadrados Ordinarios (MCO) para un modelo de regresión lineal múltiple, siguiendo la notación y el desarrollo de las notas de clase. Vamos a:
+
+1. Generar datos sintéticos a partir de un modelo conocido.
+2. Construir las matrices $\mathbf{X}$ y el vector $\mathbf{Y}$.
+3. Calcular $\hat{\boldsymbol{\beta}} = (\mathbf{X}'\mathbf{X})^{-1}\mathbf{X}'\mathbf{Y}$ a mano.
+4. Obtener residuales, $\hat{\sigma}^2$ y errores estándar.
+5. Realizar pruebas de hipótesis individuales ($t$) y global ($F$).
+6. Calcular e interpretar el $R^2$.
+7. Verificar todo con `lm()`.
+
+```{r librerias}
+library(tidyverse)
+library(knitr)
+library(kableExtra)
+```
+
+# Modelo y datos sintéticos
+
+## El modelo verdadero
+
+Supongamos que queremos explicar el salario mensual (en miles de pesos) de un trabajador en función de sus años de educación y sus años de experiencia. El modelo poblacional es:
+
+$$Y_i = \beta_0 + \beta_1 \text{Educ}_i + \beta_2 \text{Exper}_i + \varepsilon_i$$
+
+donde $\varepsilon_i \sim N(0, \sigma^2)$, con los siguientes parámetros verdaderos:
+
+$$\beta_0 = 5, \quad \beta_1 = 2.5, \quad \beta_2 = 1.2, \quad \sigma = 3$$
+
+Es decir, cada año adicional de educación se asocia con un incremento de 2.5 mil pesos, y cada año de experiencia con un incremento de 1.2 mil pesos.
+
+## Generación de los datos
+
+```{r datos}
+set.seed(42) # Fijamos semilla para reproducibilidad
+
+n <- 50 # Tamaño de muestra
+
+# Parámetros verdaderos
+beta_true <- c(5, 2.5, 1.2)
+sigma_true <- 3
+
+# Variables independientes
+educ  <- round(runif(n, min = 6, max = 22), 1)   # Años de educación
+exper <- round(runif(n, min = 0, max = 30), 1)    # Años de experiencia
+
+# Error aleatorio
+epsilon <- rnorm(n, mean = 0, sd = sigma_true)
+
+# Variable dependiente
+salario <- beta_true[1] + beta_true[2] * educ + beta_true[3] * exper + epsilon
+
+# Data frame
+datos <- data.frame(salario, educ, exper)
+
+head(datos, 10)
+```
+
+## Estadísticas descriptivas
+
+```{r descriptivas}
+summary(datos)
+```
+
+## Visualización exploratoria
+
+```{r scatter-educ}
+ggplot(datos, aes(x = educ, y = salario)) +
+  geom_point(color = "steelblue", size = 2, alpha = 0.7) +
+  labs(title = "Salario vs. Años de Educación",
+       x = "Años de educación", y = "Salario (miles de pesos)") +
+  theme_minimal()
+```
+
+```{r scatter-exper}
+ggplot(datos, aes(x = exper, y = salario)) +
+  geom_point(color = "firebrick", size = 2, alpha = 0.7) +
+  labs(title = "Salario vs. Años de Experiencia",
+       x = "Años de experiencia", y = "Salario (miles de pesos)") +
+  theme_minimal()
+```
+
+# Construcción matricial del estimador MCO
+
+## Definición de $\mathbf{X}$ y $\mathbf{Y}$
+
+Recordemos de las notas que definimos:
+
+$$\mathbf{Y} = \begin{pmatrix} y_1 \\ y_2 \\ \vdots \\ y_n \end{pmatrix}, \qquad \mathbf{X} = \begin{pmatrix} 1 & x_{11} & x_{12} \\ 1 & x_{21} & x_{22} \\ \vdots & \vdots & \vdots \\ 1 & x_{n1} & x_{n2} \end{pmatrix}$$
+
+donde la primera columna de $\mathbf{X}$ es un vector de unos (la constante).
+
+```{r matrices}
+# Vector Y
+Y <- matrix(salario, ncol = 1)
+
+# Matriz X (con columna de unos)
+X <- cbind(1, educ, exper)
+
+cat("Dimensiones de X:", dim(X), "\n")
+cat("Dimensiones de Y:", dim(Y), "\n")
+```
+
+Verifiquemos las primeras filas:
+
+```{r ver-matrices}
+head(X)
+head(Y)
+```
+
+## Cálculo de $\mathbf{X}'\mathbf{X}$
+
+De las notas:
+
+$$\mathbf{X}'\mathbf{X} = \begin{pmatrix} n & \sum x_{i1} & \sum x_{i2} \\ \sum x_{i1} & \sum x_{i1}^2 & \sum x_{i1}x_{i2} \\ \sum x_{i2} & \sum x_{i2}x_{i1} & \sum x_{i2}^2 \end{pmatrix}$$
+
+```{r XtX}
+XtX <- t(X) %*% X
+XtX
+```
+
+Notemos que $\mathbf{X}'\mathbf{X}$ es simétrica, como lo señalan las notas:
+
+```{r simetria}
+# Verificamos simetría
+all.equal(XtX, t(XtX))
+```
+
+## Cálculo de $\mathbf{X}'\mathbf{Y}$
+
+$$\mathbf{X}'\mathbf{Y} = \begin{pmatrix} \sum y_i \\ \sum x_{i1} y_i \\ \sum x_{i2} y_i \end{pmatrix}$$
+
+```{r XtY}
+XtY <- t(X) %*% Y
+XtY
+```
+
+## El estimador $\hat{\boldsymbol{\beta}} = (\mathbf{X}'\mathbf{X})^{-1}\mathbf{X}'\mathbf{Y}$
+
+```{r beta-hat}
+XtX_inv <- solve(XtX)  # Inversa de X'X
+beta_hat <- XtX_inv %*% XtY
+
+cat("Estimadores:\n")
+cat("  β̂₀ (intercepto) =", round(beta_hat[1], 4), "\n")
+cat("  β̂₁ (educación)  =", round(beta_hat[2], 4), "\n")
+cat("  β̂₂ (experiencia)=", round(beta_hat[3], 4), "\n")
+cat("\nParámetros verdaderos: β₀ =", beta_true[1],
+    ", β₁ =", beta_true[2], ", β₂ =", beta_true[3], "\n")
+```
+
+# Residuales y estimación de $\sigma^2$
+
+## Vector de residuales
+
+$$\mathbf{e} = \mathbf{Y} - \mathbf{X}\hat{\boldsymbol{\beta}}$$
+
+```{r residuales}
+Y_hat <- X %*% beta_hat     # Valores ajustados
+e     <- Y - Y_hat           # Residuales
+
+cat("Suma de residuales (debe ser ≈ 0):", round(sum(e), 10), "\n")
+```
+
+## Estimador insesgado de $\sigma^2$
+
+De las notas:
+
+$$\hat{\sigma}^2 = \frac{\mathbf{e}'\mathbf{e}}{n - (K+1)}$$
+
+donde $K+1$ es el número de parámetros (en nuestro caso, $K+1 = 3$).
+
+```{r sigma2}
+K_plus_1 <- ncol(X)  # Número de parámetros
+gl <- n - K_plus_1   # Grados de libertad
+
+sigma2_hat <- as.numeric(t(e) %*% e) / gl
+
+cat("σ̂² =", round(sigma2_hat, 4), "\n")
+cat("σ̂  =", round(sqrt(sigma2_hat), 4), "\n")
+cat("σ verdadero =", sigma_true, "\n")
+```
+
+## Distribución muestral de $\hat{\boldsymbol{\beta}}$
+
+De las notas:
+
+$$\hat{\boldsymbol{\beta}} \sim N\left(\boldsymbol{\beta},\; \hat{\sigma}^2 (\mathbf{X}'\mathbf{X})^{-1}\right)$$
+
+```{r var-beta}
+Var_beta <- sigma2_hat * XtX_inv
+
+cat("Matriz de varianzas-covarianzas de β̂:\n")
+round(Var_beta, 6)
+```
+
+Los errores estándar de cada coeficiente son la raíz de la diagonal:
+
+```{r se}
+se_beta <- sqrt(diag(Var_beta))
+
+cat("Errores estándar:\n")
+cat("  SE(β̂₀) =", round(se_beta[1], 4), "\n")
+cat("  SE(β̂₁) =", round(se_beta[2], 4), "\n")
+cat("  SE(β̂₂) =", round(se_beta[3], 4), "\n")
+```
+
+# Pruebas de hipótesis individuales (prueba $t$)
+
+## Planteamiento
+
+Para cada coeficiente $k = 0, 1, 2$:
+
+$$H_0: \beta_k = 0 \qquad H_a: \beta_k \neq 0$$
+
+La estadística de prueba es:
+
+$$T = \frac{\hat{\beta}_k - 0}{\sqrt{\hat{\sigma}^2 (\mathbf{X}'\mathbf{X})^{-1}_{kk}}} \sim t_{n-(K+1)}$$
+
+## Cálculo manual
+
+```{r t-test-manual}
+t_stats <- beta_hat / se_beta
+p_vals  <- 2 * pt(abs(t_stats), df = gl, lower.tail = FALSE)
+
+tabla_t <- data.frame(
+  Coeficiente = c("β̂₀ (Intercepto)", "β̂₁ (Educación)", "β̂₂ (Experiencia)"),
+  Estimado    = round(beta_hat, 4),
+  Error_Std   = round(se_beta, 4),
+  t_valor     = round(t_stats, 4),
+  p_valor     = round(p_vals, 6),
+  Significativo = ifelse(p_vals < 0.05, "Sí ✓", "No")
+)
+
+kable(tabla_t, col.names = c("Coeficiente", "Estimado", "Error Std.",
+                              "t", "p-valor", "Sig. (5%)"),
+      align = "lccccc") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+## Interpretación
+
+Rechazamos $H_0: \beta_k = 0$ cuando $|t| > t_{1-\alpha/2, \, n-(K+1)}$. El valor crítico al 5% es:
+
+```{r t-critico}
+t_crit <- qt(0.975, df = gl)
+cat("Valor crítico t al 5% (dos colas):", round(t_crit, 4), "\n")
+```
+
+# Prueba de hipótesis global (prueba $F$)
+
+## Planteamiento
+
+De las notas, la prueba global evalúa si **todas** las variables independientes tienen efecto nulo en $Y$:
+
+$$H_0: \beta_1 = \beta_2 = 0 \qquad H_a: \text{No } H_0$$
+
+Con la matriz $\mathbf{R}$ y el vector $\mathbf{r}$:
+
+$$\mathbf{R} = \begin{pmatrix} 0 & 1 & 0 \\ 0 & 0 & 1 \end{pmatrix}, \qquad \mathbf{r} = \begin{pmatrix} 0 \\ 0 \end{pmatrix}$$
+
+La estadística $F$ es:
+
+$$F = \frac{(\mathbf{R}\hat{\boldsymbol{\beta}} - \mathbf{r})' [\mathbf{R}\hat{\sigma}^2(\mathbf{X}'\mathbf{X})^{-1}\mathbf{R}']^{-1} (\mathbf{R}\hat{\boldsymbol{\beta}} - \mathbf{r})}{J} \sim F_{J, \, n-K-1}$$
+
+donde $J$ es el número de restricciones (en este caso, $J = 2$).
+
+## Cálculo manual
+
+```{r F-test-manual}
+R <- matrix(c(0, 1, 0,
+              0, 0, 1), nrow = 2, byrow = TRUE)
+r <- matrix(c(0, 0), ncol = 1)
+J <- nrow(R)
+
+Rb_minus_r <- R %*% beta_hat - r
+middle     <- R %*% (sigma2_hat * XtX_inv) %*% t(R)
+
+F_stat <- as.numeric(t(Rb_minus_r) %*% solve(middle) %*% Rb_minus_r) / J
+p_val_F <- pf(F_stat, df1 = J, df2 = gl, lower.tail = FALSE)
+
+cat("Estadística F =", round(F_stat, 4), "\n")
+cat("p-valor       =", format(p_val_F, scientific = TRUE, digits = 4), "\n")
+cat("Valor crítico F(2,", gl, ") al 5% =", round(qf(0.975, J, gl), 4), "\n")
+```
+
+## Vía descomposición de sumas de cuadrados
+
+Una forma equivalente y más intuitiva usa la descomposición de la variabilidad total:
+
+$$SST_{OT} = \sum_{i=1}^n (y_i - \bar{y})^2, \quad SSE = \sum_{i=1}^n (y_i - \hat{y}_i)^2, \quad SST_R = SST_{OT} - SSE$$
+
+$$F = \frac{SST_R / K}{SSE / (n - K - 1)}$$
+
+```{r F-via-SS}
+y_bar <- mean(Y)
+
+SSTOT <- sum((Y - y_bar)^2)
+SSE   <- sum(e^2)
+SSTR  <- SSTOT - SSE
+
+K <- ncol(X) - 1  # Número de regresores (sin la constante)
+
+F_stat_2 <- (SSTR / K) / (SSE / gl)
+
+cat("SSTOT =", round(SSTOT, 4), "\n")
+cat("SSTR  =", round(SSTR, 4), "\n")
+cat("SSE   =", round(SSE, 4), "\n")
+cat("F (vía SS) =", round(F_stat_2, 4), "\n")
+```
+
+## Tabla ANOVA manual
+
+```{r anova-tabla}
+anova_df <- data.frame(
+  Fuente = c("Regresión", "Error", "Total"),
+  gl     = c(K, gl, n - 1),
+  SS     = round(c(SSTR, SSE, SSTOT), 2),
+  MS     = round(c(SSTR/K, SSE/gl, NA), 2),
+  F_stat = c(round(F_stat_2, 2), NA, NA),
+  p_valor = c(format(p_val_F, scientific = TRUE, digits = 3), NA, NA)
+)
+
+kable(anova_df, col.names = c("Fuente", "gl", "SS", "MS", "F", "p-valor"),
+      align = "lccccc") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Coeficiente de determinación $R^2$
+
+El $R^2$ mide la proporción de la variabilidad total de $Y$ que es explicada por el modelo:
+
+$$R^2 = 1 - \frac{SSE}{SST_{OT}} = \frac{SST_R}{SST_{OT}}$$
+
+```{r R2}
+R2 <- 1 - SSE / SSTOT
+R2_adj <- 1 - (SSE / gl) / (SSTOT / (n - 1))
+
+cat("R²          =", round(R2, 4), "\n")
+cat("R² ajustado =", round(R2_adj, 4), "\n")
+```
+
+**Interpretación:** Un $R^2$ de `r round(R2, 4)` indica que aproximadamente el `r round(R2*100, 1)`% de la variabilidad en los salarios es explicada por la educación y la experiencia.
+
+# Verificación con `lm()`
+
+Finalmente, verifiquemos que nuestros cálculos manuales coinciden con la función `lm()` de R:
+
+```{r lm-check}
+modelo <- lm(salario ~ educ + exper, data = datos)
+summary(modelo)
+```
+
+## Comparación directa
+
+```{r comparar}
+comp <- data.frame(
+  Parametro = c("β̂₀", "β̂₁", "β̂₂", "σ̂²", "R²"),
+  Manual = round(c(beta_hat[1], beta_hat[2], beta_hat[3], sigma2_hat, R2), 6),
+  lm     = round(c(coef(modelo)[1], coef(modelo)[2], coef(modelo)[3],
+                    summary(modelo)$sigma^2, summary(modelo)$r.squared), 6)
+)
+
+kable(comp, col.names = c("Parámetro", "Cálculo manual", "lm()"),
+      align = "lcc") %>%
+  kable_styling(bootstrap_options = c("striped", "hover"), full_width = FALSE)
+```
+
+# Prueba de una restricción lineal adicional
+
+## ¿El efecto de la educación es el doble que el de la experiencia?
+
+Podemos plantear la hipótesis: $H_0: \beta_1 = 2\beta_2$, equivalentemente $\beta_1 - 2\beta_2 = 0$.
+
+$$\mathbf{R} = \begin{pmatrix} 0 & 1 & -2 \end{pmatrix}, \qquad r = 0$$
+
+$$t = \frac{\mathbf{R}\hat{\boldsymbol{\beta}} - r}{\sqrt{\hat{\sigma}^2 \mathbf{R}(\mathbf{X}'\mathbf{X})^{-1}\mathbf{R}'}} \sim t_{n-(K+1)}$$
+
+```{r restriccion}
+R_rest <- matrix(c(0, 1, -2), nrow = 1)
+r_rest <- 0
+
+Rb <- R_rest %*% beta_hat - r_rest
+se_Rb <- sqrt(as.numeric(sigma2_hat * R_rest %*% XtX_inv %*% t(R_rest)))
+t_rest <- as.numeric(Rb) / se_Rb
+p_rest <- 2 * pt(abs(t_rest), df = gl, lower.tail = FALSE)
+
+cat("β̂₁ - 2β̂₂ =", round(as.numeric(Rb), 4), "\n")
+cat("Error estándar:", round(se_Rb, 4), "\n")
+cat("t =", round(t_rest, 4), "\n")
+cat("p-valor =", round(p_rest, 4), "\n")
+
+if (p_rest < 0.05) {
+  cat("\n→ Rechazamos H₀: la educación NO tiene exactamente el doble de efecto que la experiencia.\n")
+} else {
+  cat("\n→ No rechazamos H₀: no hay evidencia suficiente contra la hipótesis.\n")
+}
+```
+
+# Visualización de resultados
+
+## Valores observados vs. ajustados
+
+```{r obs-vs-fit}
+datos$salario_hat <- as.numeric(Y_hat)
+
+ggplot(datos, aes(x = salario_hat, y = salario)) +
+  geom_point(color = "steelblue", size = 2, alpha = 0.7) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "red") +
+  labs(title = "Valores Observados vs. Ajustados",
+       x = expression(hat(Y)), y = "Y") +
+  theme_minimal()
+```
+
+## Residuales vs. valores ajustados
+
+```{r residuales-plot}
+datos$residuales <- as.numeric(e)
+
+ggplot(datos, aes(x = salario_hat, y = residuales)) +
+  geom_point(color = "firebrick", size = 2, alpha = 0.7) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey40") +
+  labs(title = "Residuales vs. Valores Ajustados",
+       subtitle = "Evaluación visual de homocedasticidad",
+       x = expression(hat(Y)), y = "Residuales") +
+  theme_minimal()
+```
+
+## Histograma de residuales
+
+```{r hist-residuales}
+ggplot(datos, aes(x = residuales)) +
+  geom_histogram(aes(y = after_stat(density)),
+                 fill = "steelblue", color = "white", bins = 12) +
+  stat_function(fun = dnorm,
+                args = list(mean = 0, sd = sqrt(sigma2_hat)),
+                color = "red", linewidth = 1) +
+  labs(title = "Distribución de los Residuales",
+       subtitle = "Evaluación visual de normalidad",
+       x = "Residuales", y = "Densidad") +
+  theme_minimal()
+```
+
+# Resumen de fórmulas clave
+
+| Concepto | Fórmula |
+|:---------|:--------|
+| Estimador MCO | $\hat{\boldsymbol{\beta}} = (\mathbf{X}'\mathbf{X})^{-1}\mathbf{X}'\mathbf{Y}$ |
+| Residuales | $\mathbf{e} = \mathbf{Y} - \mathbf{X}\hat{\boldsymbol{\beta}}$ |
+| Varianza estimada | $\hat{\sigma}^2 = \frac{\mathbf{e}'\mathbf{e}}{n-(K+1)}$ |
+| Distribución de $\hat{\beta}$ | $\hat{\boldsymbol{\beta}} \sim N(\boldsymbol{\beta}, \hat{\sigma}^2(\mathbf{X}'\mathbf{X})^{-1})$ |
+| Prueba $t$ individual | $t = \frac{\hat{\beta}_k}{\sqrt{\hat{\sigma}^2(\mathbf{X}'\mathbf{X})^{-1}_{kk}}} \sim t_{n-(K+1)}$ |
+| Prueba $F$ global | $F = \frac{SST_R/K}{SSE/(n-K-1)} \sim F_{K, n-K-1}$ |
+| $R^2$ | $R^2 = 1 - \frac{SSE}{SST_{OT}}$ |
+| Restricción lineal | $t = \frac{\mathbf{R}\hat{\boldsymbol{\beta}} - r}{\sqrt{\hat{\sigma}^2 \mathbf{R}(\mathbf{X}'\mathbf{X})^{-1}\mathbf{R}'}} \sim t_{n-(K+1)}$ |
+
+# Tarea
+
+1. **Cambia la semilla** (`set.seed`) y vuelve a correr todo el documento. ¿Cómo cambian los estimadores? ¿Y el $R^2$?
+
+2. **Aumenta $\sigma$** a 10 y repite. ¿Qué pasa con la significancia de los coeficientes y el $R^2$?
+
+3. **Agrega una variable irrelevante**: genera una variable aleatoria sin relación con $Y$ (por ejemplo, `z <- rnorm(n)`) y agrégala al modelo. ¿Es significativa? ¿Qué pasa con el $R^2$ y el $R^2$ ajustado?
+
+4. **Prueba la restricción** $H_0: \beta_1 + \beta_2 = 3.7$ usando la estadística $t$ con $\mathbf{R} = (0, 1, 1)$ y $r = 3.7$.
+
+
+**Entrega el 7 de junio de 2026**
